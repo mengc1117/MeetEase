@@ -3,12 +3,18 @@ package com.cs407.meetease.ui.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.meetease.data.ConfirmedMeeting
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.GeoPoint
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class RemindersUiState(
     val isSharingLocation: Boolean = false,
@@ -20,44 +26,73 @@ class RemindersViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(RemindersUiState())
     val uiState: StateFlow<RemindersUiState> = _uiState.asStateFlow()
 
+    private val db = Firebase.firestore
+    private val auth = Firebase.auth
+    private var groupId: String? = null
+
+    init {
+        loadGroupId()
+    }
+
+    private fun loadGroupId() {
+        viewModelScope.launch {
+            auth.currentUser?.uid?.let { userId ->
+                try {
+                    val userDoc = db.collection("users").document(userId).get().await()
+                    groupId = userDoc.getString("groupId")
+                } catch (e: Exception) {
+                    // Handle error
+                }
+            }
+        }
+    }
+
     fun toggleLocationSharing(meeting: ConfirmedMeeting?) {
-        if (meeting == null) return
+        if (meeting == null || groupId == null) return
+        val userId = auth.currentUser?.uid ?: return
 
         val isCurrentlySharing = _uiState.value.isSharingLocation
         if (!isCurrentlySharing) {
-            startLocationSharing()
+            startLocationSharing(groupId!!, userId)
         } else {
-            stopLocationSharing()
+            stopLocationSharing(groupId!!, userId)
         }
     }
 
-    private fun startLocationSharing() {
+    private fun startLocationSharing(groupId: String, userId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSharingLocation = true, sharingStatus = "Starting location service...") }
 
-            // --- BACKEND HOOK ---
-            // In a real app, you would:
-            // 1. Check for FINE_LOCATION and BACKGROUND_LOCATION permissions.
-            // 2. Start a Foreground Service (to run in the background).
-            // 3. This service would get location updates from FusedLocationProviderClient.
-            // 4. It would then write the Lat/Lng to Firebase Firestore:
-            //    e.g., db.collection("meetings").document(meetingId)
-            //            .collection("attendees").document(userId)
-            //            .update("location", GeoPoint(lat, lng))
+            try {
+                val simulatedLocation = GeoPoint(43.0754, -89.4043)
+                db.collection("groups").document(groupId)
+                    .collection("members").document(userId)
+                    .update("location", simulatedLocation)
+                    .await()
 
-            // Simulation
-            delay(1500)
-            _uiState.update { it.copy(sharingStatus = "Live location is ON") }
+                delay(1500) // 模拟启动服务的延迟
+                _uiState.update { it.copy(sharingStatus = "Live location is ON") }
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSharingLocation = false, sharingStatus = "Failed to start sharing: ${e.message}") }
+            }
         }
     }
 
-    private fun stopLocationSharing() {
+    private fun stopLocationSharing(groupId: String, userId: String) {
         viewModelScope.launch {
-            // --- BACKEND HOOK ---
-            // 1. Stop the Foreground Service.
-            // 2. Clear the location data from Firestore.
 
-            _uiState.update { it.copy(isSharingLocation = false, sharingStatus = "Tap to share live location") }
+            try {
+                db.collection("groups").document(groupId)
+                    .collection("members").document(userId)
+                    .update("location", FieldValue.delete()) // 删除位置字段
+                    .await()
+
+                _uiState.update { it.copy(isSharingLocation = false, sharingStatus = "Tap to share live location") }
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(sharingStatus = "Failed to stop sharing: ${e.message}") }
+            }
         }
     }
 }

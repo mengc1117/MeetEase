@@ -13,27 +13,35 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cs407.meetease.navigation.BottomNavScreen
+import com.cs407.meetease.ui.viewmodels.MapViewModel
 import com.cs407.meetease.ui.viewmodels.MembersViewModel
+import com.cs407.meetease.ui.viewmodels.RemindersViewModel
 import com.cs407.meetease.ui.viewmodels.SchedulerViewModel
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun MainScreen() {
+fun MainScreen(rootNavController: NavController) { // 接收根 NavController
     val navController = rememberNavController()
+
     val items = listOf(
         BottomNavScreen.Scheduler,
         BottomNavScreen.Members,
         BottomNavScreen.Reminders,
+        BottomNavScreen.Map,
+        BottomNavScreen.Profile // 添加 Profile
     )
 
-    // Create ViewModels that will be shared by the screens
+
     val schedulerViewModel: SchedulerViewModel = viewModel()
     val membersViewModel: MembersViewModel = viewModel()
+    val remindersViewModel: RemindersViewModel = viewModel()
+    val mapViewModel: MapViewModel = viewModel()
 
     Scaffold(
         bottomBar = {
@@ -71,9 +79,19 @@ fun MainScreen() {
                 MembersScreen(membersViewModel)
             }
             composable(BottomNavScreen.Reminders.route) {
-                // Pass the confirmed meeting state from the scheduler VM
-                RemindersScreen(schedulerViewModel.uiState)
+                RemindersScreen(
+                    schedulerUiState = schedulerViewModel.uiState,
+                    remindersViewModel = remindersViewModel
+                )
             }
+            composable(BottomNavScreen.Map.route) {
+                MapScreen(mapViewModel)
+            }
+
+            composable(BottomNavScreen.Profile.route) {
+                ProfileScreen(rootNavController = rootNavController)
+            }
+
         }
     }
 }
