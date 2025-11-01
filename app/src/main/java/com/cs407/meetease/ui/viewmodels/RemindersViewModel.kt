@@ -70,7 +70,7 @@ class RemindersViewModel : ViewModel() {
                     .update("location", simulatedLocation)
                     .await()
 
-                delay(1500) // 模拟启动服务的延迟
+                delay(1500)
                 _uiState.update { it.copy(sharingStatus = "Live location is ON") }
 
             } catch (e: Exception) {

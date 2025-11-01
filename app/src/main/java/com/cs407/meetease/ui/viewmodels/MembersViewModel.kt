@@ -43,7 +43,6 @@ class MembersViewModel : ViewModel() {
             }
 
             try {
-                // 1. 获取用户的 groupId
                 val userDoc = db.collection("users").document(userId).get().await()
                 groupId = userDoc.getString("groupId")
                 if (groupId == null) {
@@ -51,9 +50,8 @@ class MembersViewModel : ViewModel() {
                     return@launch
                 }
 
-                // 2. 监听成员变化
                 listenForMembers(groupId!!)
-                loadMockContacts() // 模拟联系人数据
+                loadMockContacts()
 
             } catch (e: Exception) {
                 _uiState.update { it.copy(message = e.message, isLoading = false) }
@@ -93,8 +91,6 @@ class MembersViewModel : ViewModel() {
                 return@launch
             }
 
-            // 在实际应用中, 你不会使用 "contact_id"，而是会邀请该用户
-            // 这里我们只是模拟添加一个新成员
             val newMember = Member(id = "user_${System.currentTimeMillis()}", name = contact.name)
 
             try {
@@ -113,7 +109,6 @@ class MembersViewModel : ViewModel() {
     fun removeMember(member: Member) {
         val gId = groupId ?: return
 
-        // 检查是否为组织者（在真实应用中应检查 member.id == auth.currentUser.uid）
         if (member.name.contains("(Organizer)")) {
             _uiState.update { it.copy(message = "Cannot remove the organizer.") }
             return

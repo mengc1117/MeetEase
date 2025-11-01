@@ -100,10 +100,7 @@ fun RemindersScreen(
     }
 }
 
-// (NoMeetingCard, ConfirmedMeetingCard, MemberStatusCard 代码与你原有的一致，此处省略)
-// ...
 
-// 新增卡片
 @Composable
 fun LocationSharingCard(
     uiState: com.cs407.meetease.ui.viewmodels.RemindersUiState,

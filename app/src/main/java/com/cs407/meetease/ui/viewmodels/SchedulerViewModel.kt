@@ -97,9 +97,6 @@ class SchedulerViewModel : ViewModel() {
                 }
             }
     }
-
-    //
-    // --- THIS FUNCTION IS NOW FIXED ---
     //
     private suspend fun loadAvailabilityForMember(groupId: String, memberId: String): MutableList<AvailabilitySlot> {
         return try {
@@ -186,11 +183,11 @@ class SchedulerViewModel : ViewModel() {
 
 
     fun findBestMeetingTimes() {
-        // ... (your logic)
+
     }
 
     fun confirmMeeting(suggestion: MeetingSuggestion) {
-        // ... (your logic)
+
     }
 
     fun clearMessage() {

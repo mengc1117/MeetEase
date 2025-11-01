@@ -26,7 +26,7 @@ import com.cs407.meetease.ui.viewmodels.SchedulerViewModel
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun MainScreen(rootNavController: NavController) { // 接收根 NavController
+fun MainScreen(rootNavController: NavController) {
     val navController = rememberNavController()
 
     val items = listOf(
@@ -34,7 +34,7 @@ fun MainScreen(rootNavController: NavController) { // 接收根 NavController
         BottomNavScreen.Members,
         BottomNavScreen.Reminders,
         BottomNavScreen.Map,
-        BottomNavScreen.Profile // 添加 Profile
+        BottomNavScreen.Profile
     )
 
 
