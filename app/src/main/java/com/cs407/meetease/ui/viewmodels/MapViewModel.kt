@@ -1,6 +1,7 @@
 package com.cs407.meetease.ui.viewmodels
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.meetease.data.Member
 import com.google.firebase.auth.ktx.auth
@@ -20,7 +21,7 @@ data class MapUiState(
     val errorMessage: String? = null
 )
 
-class MapViewModel : ViewModel() {
+class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
@@ -49,7 +50,6 @@ class MapViewModel : ViewModel() {
                     _uiState.update { it.copy(errorMessage = "User has no group.", isLoading = false) }
                     return@launch
                 }
-
 
                 listenForMemberLocations(groupId!!)
 
