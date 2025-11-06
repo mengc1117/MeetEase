@@ -1,6 +1,7 @@
 package com.cs407.meetease.data
 
 import com.google.firebase.firestore.GeoPoint
+
 data class Group(
     val groupId: String = "",
     val groupName: String = "My Team",
@@ -8,8 +9,8 @@ data class Group(
 )
 
 data class Member(
-    val id: String = "", // Added default value
-    val name: String = "", // Added default value
+    val id: String = "",
+    val name: String = "",
     val avatarUrl: String? = null,
     var availability: MutableList<AvailabilitySlot> = mutableListOf(),
     val location: GeoPoint? = null
@@ -22,8 +23,8 @@ data class User(
 
 
 data class AvailabilitySlot(
-    val dayIndex: Int = 0, // Added default value
-    val slotIndex: Int = 0 // Added default value
+    val dayIndex: Int = 0,
+    val slotIndex: Int = 0
 )
 
 data class MeetingSuggestion(
@@ -32,17 +33,25 @@ data class MeetingSuggestion(
     val durationSlots: Int = 0,
     val availableCount: Int = 0,
     val totalCount: Int = 0,
-    val availableMembers: List<String> = emptyList() // Added default value
+    val availableMembers: List<String> = emptyList()
 )
 
 data class ConfirmedMeeting(
-    val day: String = "", // Added default value
-    val timeRange: String = "", // Added default value
-    val attendees: List<MemberStatus> = emptyList() // Added default value
+    val day: String = "",
+    val timeRange: String = "",
+    val attendees: List<MemberStatus> = emptyList()
 )
 
 data class MemberStatus(
-    val name: String = "", // Added default value
-    val status: String = "", // Added default value
+    val name: String = "",
+    val status: String = "",
     val eta: String? = null
+)
+
+data class GoogleCalendarEvent(
+    val dayIndex: Int = 0,
+    val startSlot: Int = 0,
+    val endSlot: Int = 0,
+    val title: String = "Busy",
+    val timeRange: String = ""
 )

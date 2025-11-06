@@ -1,6 +1,7 @@
 package com.cs407.meetease.ui.screens
 
 import android.annotation.SuppressLint
+import android.app.Application
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -10,6 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -37,11 +40,13 @@ fun MainScreen(rootNavController: NavController) {
         BottomNavScreen.Profile
     )
 
+    val context = LocalContext.current
+    val factory = ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as Application)
 
-    val schedulerViewModel: SchedulerViewModel = viewModel()
-    val membersViewModel: MembersViewModel = viewModel()
-    val remindersViewModel: RemindersViewModel = viewModel()
-    val mapViewModel: MapViewModel = viewModel()
+    val schedulerViewModel: SchedulerViewModel = viewModel(factory = factory)
+    val membersViewModel: MembersViewModel = viewModel(factory = factory)
+    val remindersViewModel: RemindersViewModel = viewModel(factory = factory)
+    val mapViewModel: MapViewModel = viewModel(factory = factory)
 
     Scaffold(
         bottomBar = {

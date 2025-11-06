@@ -1,12 +1,15 @@
 package com.cs407.meetease.ui.viewmodels
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.provider.ContactsContract
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.meetease.data.Member
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObjects
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,12 +19,12 @@ import kotlinx.coroutines.tasks.await
 
 data class MembersUiState(
     val members: List<Member> = emptyList(),
-    val contacts: List<Member> = emptyList(), // 模拟联系人
+    val contacts: List<Member> = emptyList(),
     val message: String? = null,
     val isLoading: Boolean = true
 )
 
-class MembersViewModel : ViewModel() {
+class MembersViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(MembersUiState())
     val uiState: StateFlow<MembersUiState> = _uiState.asStateFlow()
@@ -51,7 +54,6 @@ class MembersViewModel : ViewModel() {
                 }
 
                 listenForMembers(groupId!!)
-                loadMockContacts()
 
             } catch (e: Exception) {
                 _uiState.update { it.copy(message = e.message, isLoading = false) }
@@ -73,13 +75,43 @@ class MembersViewModel : ViewModel() {
             }
     }
 
-    private fun loadMockContacts() {
-        val mockContacts = listOf(
-            Member(id = "contact_1", name = "Charlie Brown"),
-            Member(id = "contact_2", name = "David Lee"),
-            Member(id = "contact_3", name = "Emily White")
-        )
-        _uiState.update { it.copy(contacts = mockContacts) }
+    fun loadSystemContacts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val contactsList = mutableListOf<Member>()
+            val contentResolver = getApplication<Application>().contentResolver
+
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY
+            )
+
+            val cursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                null,
+                null,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY + " ASC"
+            )
+
+            cursor?.use {
+                val idIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+                val nameIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY)
+
+                val contactNames = mutableSetOf<String>()
+
+                while (it.moveToNext()) {
+                    val id = it.getString(idIndex)
+                    val name = it.getString(nameIndex)
+
+                    if (name != null && !contactNames.contains(name)) {
+                        contactNames.add(name)
+                        contactsList.add(Member(id = id, name = name))
+                    }
+                }
+            }
+
+            _uiState.update { it.copy(contacts = contactsList) }
+        }
     }
 
     fun addMemberFromContacts(contact: Member) {
@@ -91,7 +123,7 @@ class MembersViewModel : ViewModel() {
                 return@launch
             }
 
-            val newMember = Member(id = "user_${System.currentTimeMillis()}", name = contact.name)
+            val newMember = Member(id = "contact_${contact.id}", name = contact.name)
 
             try {
                 db.collection("groups").document(gId).collection("members")
@@ -123,6 +155,10 @@ class MembersViewModel : ViewModel() {
                 _uiState.update { it.copy(message = e.message) }
             }
         }
+    }
+
+    fun showErrorMessage(message: String) {
+        _uiState.update { it.copy(message = message) }
     }
 
     fun clearMessage() {

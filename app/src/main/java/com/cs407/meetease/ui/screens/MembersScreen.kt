@@ -1,5 +1,9 @@
 package com.cs407.meetease.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,8 +50,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.cs407.meetease.data.Member
 import com.cs407.meetease.ui.theme.AppGray
 import com.cs407.meetease.ui.viewmodels.MembersViewModel
@@ -59,6 +65,19 @@ fun MembersScreen(viewModel: MembersViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showContactsDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            viewModel.loadSystemContacts()
+            showContactsDialog = true
+        } else {
+            viewModel.clearMessage()
+            viewModel.showErrorMessage("Contacts permission is required to add members.")
+        }
+    }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -85,19 +104,32 @@ fun MembersScreen(viewModel: MembersViewModel) {
             }
             item {
                 ActionCard(
-                    title = "Add from Contacts (Simulated)",
+                    title = "Add from Contacts",
                     icon = Icons.Filled.Add,
-                    onClick = { showContactsDialog = true }
+                    onClick = {
+                        when (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.READ_CONTACTS
+                        )) {
+                            PackageManager.PERMISSION_GRANTED -> {
+                                viewModel.loadSystemContacts()
+                                showContactsDialog = true
+                            }
+                            else -> {
+                                launcher.launch(Manifest.permission.READ_CONTACTS)
+                            }
+                        }
+                    }
                 )
                 ActionCard(
                     title = "Share Invite Link",
                     icon = Icons.Filled.ContentCopy,
-                    onClick = { /* Simulate copy */ }
+                    onClick = { }
                 )
                 ActionCard(
                     title = "Remind Pending Members",
                     icon = Icons.Filled.Notifications,
-                    onClick = { /* Simulate reminder */ }
+                    onClick = { }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -206,7 +238,7 @@ fun ContactsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add from Contacts (Simulated)") },
+        title = { Text("Add from Contacts") },
         text = {
             LazyColumn {
                 items(contacts) { contact ->

@@ -40,7 +40,7 @@ import com.cs407.meetease.ui.viewmodels.AuthViewModel
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { // Add authViewModel
+fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -48,7 +48,6 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { //
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Show errors in a snackbar
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             scope.launch {
@@ -58,7 +57,6 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { //
         }
     }
 
-    // Navigate on success
     LaunchedEffect(uiState.authSuccess) {
         if (uiState.authSuccess) {
             navController.navigate(Screen.Main.route) {
@@ -67,13 +65,13 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { //
         }
     }
 
-    Scaffold( // Add Scaffold to host the Snackbar
+    Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Apply padding from Scaffold
+                .padding(paddingValues)
                 .safeDrawingPadding()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -101,11 +99,11 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { //
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email") }, // Simplified label
+                label = { Text("Email") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 singleLine = true,
-                enabled = !uiState.isLoading // Disable when loading
+                enabled = !uiState.isLoading
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -118,7 +116,7 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { //
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true,
-                enabled = !uiState.isLoading // Disable when loading
+                enabled = !uiState.isLoading
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -128,7 +126,6 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) { //
             } else {
                 Button(
                     onClick = {
-                        // Call the signIn function
                         authViewModel.signIn(email, password)
                     },
                     modifier = Modifier

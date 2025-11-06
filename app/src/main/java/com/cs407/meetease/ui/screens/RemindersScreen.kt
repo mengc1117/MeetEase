@@ -1,5 +1,11 @@
 package com.cs407.meetease.ui.screens
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,13 +17,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
@@ -32,9 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.cs407.meetease.data.ConfirmedMeeting
 import com.cs407.meetease.data.MemberStatus
 import com.cs407.meetease.ui.theme.AppAmber
@@ -43,7 +49,6 @@ import com.cs407.meetease.ui.theme.AppRed
 import com.cs407.meetease.ui.viewmodels.RemindersViewModel
 import com.cs407.meetease.ui.viewmodels.SchedulerUiState
 import kotlinx.coroutines.flow.StateFlow
-import androidx.compose.foundation.layout.width
 
 
 @Composable
@@ -54,6 +59,19 @@ fun RemindersScreen(
     val sUiState by schedulerUiState.collectAsState()
     val rUiState by remindersViewModel.uiState.collectAsState()
     val confirmedMeeting = sUiState.confirmedMeeting
+
+    val context = LocalContext.current
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { permissions ->
+            if (permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)) {
+                remindersViewModel.toggleLocationSharing(confirmedMeeting)
+            } else {
+                remindersViewModel.showPermissionError()
+            }
+        }
+    )
 
     LazyColumn(
         modifier = Modifier
@@ -83,7 +101,13 @@ fun RemindersScreen(
                 LocationSharingCard(
                     uiState = rUiState,
                     onToggleClick = {
-                        remindersViewModel.toggleLocationSharing(confirmedMeeting)
+                        checkAndRequestLocationPermission(
+                            context = context,
+                            onPermissionGranted = {
+                                remindersViewModel.toggleLocationSharing(confirmedMeeting)
+                            },
+                            permissionLauncher = locationPermissionLauncher
+                        )
                     }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -97,6 +121,26 @@ fun RemindersScreen(
                 MemberStatusCard(status = attendee)
             }
         }
+    }
+}
+
+private fun checkAndRequestLocationPermission(
+    context: Context,
+    onPermissionGranted: () -> Unit,
+    permissionLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>
+) {
+    val fineLocationPermission = Manifest.permission.ACCESS_FINE_LOCATION
+
+    val permissionsToRequest = mutableListOf<String>()
+
+    if (ContextCompat.checkSelfPermission(context, fineLocationPermission) != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(fineLocationPermission)
+    }
+
+    if (permissionsToRequest.isEmpty()) {
+        onPermissionGranted()
+    } else {
+        permissionLauncher.launch(permissionsToRequest.toTypedArray())
     }
 }
 

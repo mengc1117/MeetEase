@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MeetEase</string>
+    <string name="default_web_client_id">780106245615-r99lelhl5fsj6depneuqfd8ghp793ef4.apps.googleusercontent.com</string>
+
 </resources>
