@@ -1,6 +1,10 @@
 package com.cs407.meetease.ui.screens
 
+import android.Manifest
 import android.app.Application
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,6 +56,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +80,7 @@ import com.cs407.meetease.ui.theme.AppGray
 import com.cs407.meetease.ui.theme.AppGreen
 import com.cs407.meetease.ui.theme.AppGreenLight
 import com.cs407.meetease.ui.viewmodels.SchedulerViewModel
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.size
 
 
@@ -86,6 +92,27 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateEventDialog by remember { mutableStateOf(false) }
     var clickedEvent: GoogleCalendarEvent? by remember { mutableStateOf(null) }
+    val scope = rememberCoroutineScope()
+
+    // Notification permission launcher
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (!isGranted) {
+                // Show a message that notifications won't work
+                scope.launch {
+                    snackbarHostState.showSnackbar("Notification permission denied. You won't receive meeting reminders.")
+                }
+            }
+        }
+    )
+
+    // Request notification permission on first launch (Android 13+)
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {

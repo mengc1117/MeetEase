@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.meetease.data.*
+import com.cs407.meetease.utils.MeetingReminderScheduler
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
@@ -57,6 +58,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     private val auth = Firebase.auth
     private var groupId: String? = null
     private val userId = auth.currentUser?.uid
+    private val meetingReminderScheduler = MeetingReminderScheduler(application.applicationContext)
 
     private val today: LocalDate = LocalDate.now()
     private val dayFormatter = DateTimeFormatter.ofPattern("EEE M/d")
@@ -522,6 +524,9 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun confirmMeeting(suggestion: MeetingSuggestion) {
+        // Cancel any existing meeting reminder first
+        meetingReminderScheduler.cancelMeetingReminder()
+        
         val dayLabel = _uiState.value.dynamicDayLabels[suggestion.dayIndex]
         val startTime = slotToTime(suggestion.startSlot)
         val endTime = slotToTime(suggestion.startSlot + suggestion.durationSlots)
@@ -537,6 +542,13 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 message = "Meeting Confirmed!"
             )
         }
+
+        // Schedule reminder notification 10 minutes before meeting
+        meetingReminderScheduler.scheduleMeetingReminder(
+            meetingDay = dayLabel,
+            meetingTimeRange = "$startTime - $endTime",
+            attendeesCount = suggestion.availableMembers.size
+        )
 
         addEventToCalendar(
             title = "MeetEase Meeting",

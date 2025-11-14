@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "780106245615",
+    "project_id": "meetease-3e852",
+    "storage_bucket": "meetease-3e852.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:780106245615:android:0edac5c54f8bf4e913c21a",
+        "android_client_info": {
+          "package_name": "com.cs407.meetease"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "780106245615-t17b0jh35ramlvrgstc4pk5eiur38070.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cs407.meetease",
+            "certificate_hash": "ea18f05f8bfef7229a89093c3460e4839ce9341f"
+          }
+        },
+        {
+          "client_id": "780106245615-r99lelhl5fsj6depneuqfd8ghp793ef4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAB6q1FINu-gcMQWAs-sm2vBoZaTbAT9J4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "780106245615-r99lelhl5fsj6depneuqfd8ghp793ef4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
