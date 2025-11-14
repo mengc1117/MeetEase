@@ -84,6 +84,34 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     fun refreshData() {
         loadUserAndGroupData()
     }
+    fun analyzeConflicts(dayIndex: Int, slotIndex: Int): List<String> {
+        val conflicts = mutableListOf<String>()
+        val slot = AvailabilitySlot(dayIndex, slotIndex)
+
+        // Check if it's a Google Calendar busy time
+        if (_uiState.value.googleBusySlots.contains(slot)) {
+            val event = _uiState.value.googleEvents.firstOrNull {
+                it.dayIndex == dayIndex && slotIndex >= it.startSlot && slotIndex < it.endSlot
+            }
+            conflicts.add("You have a calendar event: ${event?.title ?: "Busy"}")
+        }
+
+        // Check which members are NOT available
+        _uiState.value.members.forEach { member ->
+            val isAvailable = member.availability.any {
+                it.dayIndex == dayIndex && it.slotIndex == slotIndex
+            }
+            if (!isAvailable) {
+                conflicts.add("${member.name} is not available")
+            }
+        }
+
+        return conflicts
+    }
+
+    fun refreshCalendar() {
+        syncGoogleCalendarBusySlots()
+    }
 
     private fun loadUserAndGroupData() {
         if (userId == null) {

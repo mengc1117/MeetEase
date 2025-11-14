@@ -15,14 +15,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EventBusy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -34,6 +39,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -74,10 +80,8 @@ import com.cs407.meetease.data.MeetingSuggestion
 import com.cs407.meetease.ui.theme.AppGray
 import com.cs407.meetease.ui.theme.AppGreen
 import com.cs407.meetease.ui.theme.AppGreenLight
+import com.cs407.meetease.ui.theme.AppRed
 import com.cs407.meetease.ui.viewmodels.SchedulerViewModel
-import androidx.compose.foundation.layout.size
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +90,8 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateEventDialog by remember { mutableStateOf(false) }
     var clickedEvent: GoogleCalendarEvent? by remember { mutableStateOf(null) }
+    var showConflictDialog by remember { mutableStateOf(false) }
+    var conflictSlot by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -130,11 +136,27 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
             ) {
                 item {
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text(
-                            text = "Scheduler",
-                            style = MaterialTheme.typography.headlineMedium,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Scheduler",
+                                style = MaterialTheme.typography.headlineMedium,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            IconButton(
+                                onClick = { viewModel.refreshCalendar() },
+                                enabled = !uiState.isLoading
+                            ) {
+                                Icon(
+                                    Icons.Filled.Refresh,
+                                    contentDescription = "Refresh Calendar",
+                                    tint = if (uiState.isLoading) Color.Gray else MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
                         DurationSelector(
                             selectedSlots = uiState.selectedDurationSlots,
@@ -145,6 +167,46 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                             text = "Member Availability",
                             style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                }
+
+                // Show loading state with message
+                if (uiState.isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Syncing calendar events...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                } else if (uiState.members.isEmpty()) {
+                    // Empty state for no members
+                    item {
+                        EmptyStateCard(
+                            title = "No Team Members",
+                            message = "Go to the Members tab to add your team",
+                            icon = Icons.Default.EventBusy
+                        )
+                    }
+                } else if (uiState.members.all { it.availability.isEmpty() }) {
+                    // Empty state for no availability
+                    item {
+                        EmptyStateCard(
+                            title = "No Availability Set",
+                            message = "Tap on the calendar slots below to mark when you're available",
+                            icon = Icons.Default.Info
                         )
                     }
                 }
@@ -167,6 +229,11 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                             } else {
                                 viewModel.toggleAvailability(day, slot)
                             }
+                        },
+                        onSlotLongClick = { day, slot ->
+                            // Show conflict dialog on long click
+                            conflictSlot = Pair(day, slot)
+                            showConflictDialog = true
                         }
                     )
                 }
@@ -177,19 +244,11 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                         Button(
                             onClick = { viewModel.findBestMeetingTimes() },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = !uiState.isLoading
+                            enabled = !uiState.isLoading && uiState.members.any { it.availability.isNotEmpty() }
                         ) {
                             Text("Find Best Times")
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                    }
-                }
-
-                if (uiState.isLoading) {
-                    item {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.padding(16.dp))
-                        }
                     }
                 }
 
@@ -240,6 +299,104 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
             timeToSlot = viewModel::timeToSlot
         )
     }
+
+    if (showConflictDialog && conflictSlot != null) {
+        ConflictDialog(
+            dayIndex = conflictSlot!!.first,
+            slotIndex = conflictSlot!!.second,
+            conflicts = viewModel.analyzeConflicts(conflictSlot!!.first, conflictSlot!!.second),
+            dayLabels = uiState.dynamicDayLabels,
+            slotToTime = viewModel::slotToTime,
+            onDismiss = { showConflictDialog = false }
+        )
+    }
+}
+
+@Composable
+fun EmptyStateCard(
+    title: String,
+    message: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = message,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun ConflictDialog(
+    dayIndex: Int,
+    slotIndex: Int,
+    conflicts: List<String>,
+    dayLabels: List<String>,
+    slotToTime: (Int) -> String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Time Slot Conflicts") },
+        text = {
+            Column {
+                Text(
+                    text = "${dayLabels.getOrNull(dayIndex) ?: "Unknown"} at ${slotToTime(slotIndex)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (conflicts.isEmpty()) {
+                    Text(
+                        "Everyone is available!",
+                        color = AppGreen,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Text("Conflicts:", style = MaterialTheme.typography.bodyMedium)
+                    conflicts.forEach { conflict ->
+                        Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text("• ", color = AppRed)
+                            Text(conflict, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK")
+            }
+        }
+    )
 }
 
 @Composable
@@ -400,7 +557,6 @@ fun CreateEventDialog(
     )
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DurationSelector(
@@ -457,7 +613,8 @@ fun CalendarGrid(
     googleBusySlots: Set<AvailabilitySlot>,
     googleEvents: List<GoogleCalendarEvent>,
     dayLabels: List<String>,
-    onSlotClick: (Int, Int) -> Unit
+    onSlotClick: (Int, Int) -> Unit,
+    onSlotLongClick: ((Int, Int) -> Unit)? = null
 ) {
     val horizontalScrollState = rememberScrollState()
     val verticalScrollState = rememberScrollState()
@@ -473,11 +630,12 @@ fun CalendarGrid(
             .height(550.dp)
     ) {
         Column(Modifier.width(timeAxisWidth)) {
-            Box(modifier = Modifier
-                .height(timeSlotHeight)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .border(0.5.dp, Color.LightGray)
+            Box(
+                modifier = Modifier
+                    .height(timeSlotHeight)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(0.5.dp, Color.LightGray)
             )
 
             Column(
@@ -523,7 +681,12 @@ fun CalendarGrid(
                             .border(0.5.dp, Color.LightGray),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = dayLabel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                        Text(
+                            text = dayLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
