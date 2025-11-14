@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# IDE settings (should not be tracked)
+.idea/
+
+# Firebase config (contains sensitive keys)
+app/google-services.json
