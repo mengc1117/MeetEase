@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.meetease.data.*
+import com.cs407.meetease.utils.MeetingReminderScheduler
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
@@ -61,6 +62,8 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     private val auth = Firebase.auth
     private var groupId: String? = null
     private val userId = auth.currentUser?.uid
+    
+    private val meetingReminderScheduler = MeetingReminderScheduler(application)
 
     private var cachedMembers: List<Member> = emptyList()
     private var cachedAvailabilities: Map<String, List<AvailabilitySlot>> = emptyMap()
@@ -262,7 +265,20 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     .update("confirmedMeeting", confirmedMeeting)
                     .await()
 
-                _uiState.update { it.copy(suggestions = emptyList(), message = "Meeting Confirmed & Invites Sent!", isLoading = false) }
+                // Schedule notification reminder 10 minutes before the meeting
+                val reminderScheduled = meetingReminderScheduler.scheduleMeetingReminder(
+                    meetingDay = dayLabel,
+                    meetingTimeRange = "$startTime - $endTime",
+                    attendeesCount = suggestion.availableMembers.size
+                )
+
+                val message = if (reminderScheduled) {
+                    "Meeting Confirmed! Reminder scheduled for 10 minutes before."
+                } else {
+                    "Meeting Confirmed & Invites Sent! (Reminder could not be scheduled)"
+                }
+
+                _uiState.update { it.copy(suggestions = emptyList(), message = message, isLoading = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(message = "Failed to save meeting: ${e.message}", isLoading = false) }
             }
