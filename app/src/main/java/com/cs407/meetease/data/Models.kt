@@ -15,12 +15,12 @@ data class Member(
     var availability: MutableList<AvailabilitySlot> = mutableListOf(),
     val location: GeoPoint? = null
 )
+
 data class User(
     val uid: String = "",
     val email: String = "",
     val groupId: String? = null
 )
-
 
 data class AvailabilitySlot(
     val dayIndex: Int = 0,
@@ -53,5 +53,12 @@ data class GoogleCalendarEvent(
     val startSlot: Int = 0,
     val endSlot: Int = 0,
     val title: String = "Busy",
-    val timeRange: String = ""
+    val timeRange: String = "",
+    val location: String = ""
+)
+
+data class EventLocation(
+    val address: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )

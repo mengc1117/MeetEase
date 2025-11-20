@@ -32,7 +32,6 @@ fun MeetEaseAppNavHost() {
             SignUpScreen(navController = navController, authViewModel = authViewModel)
         }
         composable(Screen.Main.route) {
-
             MainScreen(rootNavController = navController)
 
         }

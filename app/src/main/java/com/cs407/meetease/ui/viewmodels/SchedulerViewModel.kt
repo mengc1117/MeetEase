@@ -84,34 +84,6 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     fun refreshData() {
         loadUserAndGroupData()
     }
-    fun analyzeConflicts(dayIndex: Int, slotIndex: Int): List<String> {
-        val conflicts = mutableListOf<String>()
-        val slot = AvailabilitySlot(dayIndex, slotIndex)
-
-        // Check if it's a Google Calendar busy time
-        if (_uiState.value.googleBusySlots.contains(slot)) {
-            val event = _uiState.value.googleEvents.firstOrNull {
-                it.dayIndex == dayIndex && slotIndex >= it.startSlot && slotIndex < it.endSlot
-            }
-            conflicts.add("You have a calendar event: ${event?.title ?: "Busy"}")
-        }
-
-        // Check which members are NOT available
-        _uiState.value.members.forEach { member ->
-            val isAvailable = member.availability.any {
-                it.dayIndex == dayIndex && it.slotIndex == slotIndex
-            }
-            if (!isAvailable) {
-                conflicts.add("${member.name} is not available")
-            }
-        }
-
-        return conflicts
-    }
-
-    fun refreshCalendar() {
-        syncGoogleCalendarBusySlots()
-    }
 
     private fun loadUserAndGroupData() {
         if (userId == null) {
@@ -309,7 +281,8 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     startSlot = startHourSlot,
                     endSlot = endHourSlot,
                     title = event.summary ?: "Busy Time",
-                    timeRange = timeRange
+                    timeRange = timeRange,
+                    location = event.location ?: ""
                 )
             )
         }
@@ -382,7 +355,13 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
 
-    fun addEventToCalendar(title: String, dayIndex: Int, startSlot: Int, durationSlots: Int) {
+    fun addEventToCalendar(
+        title: String,
+        dayIndex: Int,
+        startSlot: Int,
+        durationSlots: Int,
+        location: String = ""
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val context = getApplication<Application>().applicationContext
@@ -401,6 +380,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 val service = Calendar.Builder(NetHttpTransport(), GsonFactory.getDefaultInstance(), credential)
                     .setApplicationName("MeetEase")
                     .build()
+
 
                 val event = Event().apply {
                     summary = title
@@ -430,12 +410,16 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                         dateTime = startDateTime
                         timeZone = TimeZone.getDefault().id
                     }
+
                     end = EventDateTime().apply {
                         dateTime = endDateTime
                         timeZone = TimeZone.getDefault().id
                     }
-                }
 
+                    if (location.isNotEmpty()) {
+                        this.location = location
+                    }
+                }
                 service.events().insert("primary", event).execute()
 
                 syncGoogleCalendarBusySlots()

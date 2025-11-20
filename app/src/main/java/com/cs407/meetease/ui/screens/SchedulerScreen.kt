@@ -1,6 +1,8 @@
 package com.cs407.meetease.ui.screens
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,14 +22,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.EventBusy
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -73,14 +73,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.cs407.meetease.data.AvailabilitySlot
-import com.cs407.meetease.data.GoogleCalendarEvent
-import com.cs407.meetease.data.Member
-import com.cs407.meetease.data.MeetingSuggestion
+import com.cs407.meetease.data.*
 import com.cs407.meetease.ui.theme.AppGray
 import com.cs407.meetease.ui.theme.AppGreen
 import com.cs407.meetease.ui.theme.AppGreenLight
-import com.cs407.meetease.ui.theme.AppRed
 import com.cs407.meetease.ui.viewmodels.SchedulerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,8 +86,6 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateEventDialog by remember { mutableStateOf(false) }
     var clickedEvent: GoogleCalendarEvent? by remember { mutableStateOf(null) }
-    var showConflictDialog by remember { mutableStateOf(false) }
-    var conflictSlot by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -136,27 +130,11 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
             ) {
                 item {
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Scheduler",
-                                style = MaterialTheme.typography.headlineMedium,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                            IconButton(
-                                onClick = { viewModel.refreshCalendar() },
-                                enabled = !uiState.isLoading
-                            ) {
-                                Icon(
-                                    Icons.Filled.Refresh,
-                                    contentDescription = "Refresh Calendar",
-                                    tint = if (uiState.isLoading) Color.Gray else MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Scheduler",
+                            style = MaterialTheme.typography.headlineMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         DurationSelector(
                             selectedSlots = uiState.selectedDurationSlots,
@@ -167,46 +145,6 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                             text = "Member Availability",
                             style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-                }
-
-                // Show loading state with message
-                if (uiState.isLoading) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator()
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    "Syncing calendar events...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                } else if (uiState.members.isEmpty()) {
-                    // Empty state for no members
-                    item {
-                        EmptyStateCard(
-                            title = "No Team Members",
-                            message = "Go to the Members tab to add your team",
-                            icon = Icons.Default.EventBusy
-                        )
-                    }
-                } else if (uiState.members.all { it.availability.isEmpty() }) {
-                    // Empty state for no availability
-                    item {
-                        EmptyStateCard(
-                            title = "No Availability Set",
-                            message = "Tap on the calendar slots below to mark when you're available",
-                            icon = Icons.Default.Info
                         )
                     }
                 }
@@ -229,11 +167,6 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                             } else {
                                 viewModel.toggleAvailability(day, slot)
                             }
-                        },
-                        onSlotLongClick = { day, slot ->
-                            // Show conflict dialog on long click
-                            conflictSlot = Pair(day, slot)
-                            showConflictDialog = true
                         }
                     )
                 }
@@ -244,11 +177,19 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                         Button(
                             onClick = { viewModel.findBestMeetingTimes() },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = !uiState.isLoading && uiState.members.any { it.availability.isNotEmpty() }
+                            enabled = !uiState.isLoading
                         ) {
                             Text("Find Best Times")
                         }
                         Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                if (uiState.isLoading) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                        }
                     }
                 }
 
@@ -287,116 +228,19 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
         CreateEventDialog(
             dayLabels = uiState.dynamicDayLabels,
             onDismiss = { showCreateEventDialog = false },
-            onConfirm = { title, dayIndex, startSlot, durationSlots ->
+            onConfirm = { title, dayIndex, startSlot, durationSlots, location ->
                 viewModel.addEventToCalendar(
                     title,
                     dayIndex,
                     startSlot,
-                    durationSlots
+                    durationSlots,
+                    location
                 )
                 showCreateEventDialog = false
             },
             timeToSlot = viewModel::timeToSlot
         )
     }
-
-    if (showConflictDialog && conflictSlot != null) {
-        ConflictDialog(
-            dayIndex = conflictSlot!!.first,
-            slotIndex = conflictSlot!!.second,
-            conflicts = viewModel.analyzeConflicts(conflictSlot!!.first, conflictSlot!!.second),
-            dayLabels = uiState.dynamicDayLabels,
-            slotToTime = viewModel::slotToTime,
-            onDismiss = { showConflictDialog = false }
-        )
-    }
-}
-
-@Composable
-fun EmptyStateCard(
-    title: String,
-    message: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = message,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-fun ConflictDialog(
-    dayIndex: Int,
-    slotIndex: Int,
-    conflicts: List<String>,
-    dayLabels: List<String>,
-    slotToTime: (Int) -> String,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Time Slot Conflicts") },
-        text = {
-            Column {
-                Text(
-                    text = "${dayLabels.getOrNull(dayIndex) ?: "Unknown"} at ${slotToTime(slotIndex)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                if (conflicts.isEmpty()) {
-                    Text(
-                        "Everyone is available!",
-                        color = AppGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                } else {
-                    Text("Conflicts:", style = MaterialTheme.typography.bodyMedium)
-                    conflicts.forEach { conflict ->
-                        Row(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Text("• ", color = AppRed)
-                            Text(conflict, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("OK")
-            }
-        }
-    )
 }
 
 @Composable
@@ -405,6 +249,8 @@ fun EventDetailDialog(
     dayLabels: List<String>,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Google Calendar Event") },
@@ -414,6 +260,33 @@ fun EventDetailDialog(
                 Text(text = "Time: ${event.timeRange}", style = MaterialTheme.typography.bodyMedium)
                 if (event.dayIndex in dayLabels.indices) {
                     Text(text = "Day: ${dayLabels[event.dayIndex]}", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (event.location.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(event.location)}")
+                                val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                mapIntent.setPackage("com.google.android.apps.maps")
+                                context.startActivity(mapIntent)
+                            }
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.LocationOn,
+                            contentDescription = "Location",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = event.location,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         },
@@ -430,13 +303,17 @@ fun EventDetailDialog(
 fun CreateEventDialog(
     dayLabels: List<String>,
     onDismiss: () -> Unit,
-    onConfirm: (String, Int, Int, Int) -> Unit,
+    onConfirm: (String, Int, Int, Int, String) -> Unit,
     timeToSlot: (String) -> Int
 ) {
     var title by remember { mutableStateOf("") }
     var selectedDayIndex by remember { mutableIntStateOf(0) }
     var selectedStartTime by remember { mutableStateOf(SchedulerViewModel.TIMES.first()) }
     var selectedDurationSlots by remember { mutableIntStateOf(1) }
+    var location by remember { mutableStateOf("") }
+    var showLocationInput by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     val durationOptions = mapOf(
         "30 Minutes" to 1,
@@ -452,16 +329,27 @@ fun CreateEventDialog(
         onDismissRequest = onDismiss,
         title = { Text("Create New Event") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            Column(
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 8.dp)
+            ) {
                 TextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Title") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
+
                 Spacer(Modifier.height(16.dp))
+
                 Text("Day of Week", style = MaterialTheme.typography.bodyMedium)
-                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                Row(
+                    Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 8.dp)
+                ) {
                     dayLabels.forEachIndexed { index, dayLabel ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(
@@ -472,6 +360,7 @@ fun CreateEventDialog(
                         }
                     }
                 }
+
                 Spacer(Modifier.height(16.dp))
 
                 ExposedDropdownMenuBox(
@@ -504,6 +393,7 @@ fun CreateEventDialog(
                         }
                     }
                 }
+
                 Spacer(Modifier.height(16.dp))
 
                 ExposedDropdownMenuBox(
@@ -536,13 +426,88 @@ fun CreateEventDialog(
                         }
                     }
                 }
+
+                Spacer(Modifier.height(16.dp))
+
+                if (!showLocationInput) {
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = {},
+                        label = { Text("Location (Optional)") },
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            IconButton(onClick = { showLocationInput = true }) {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = "Add Location",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        placeholder = { Text("Tap location icon to add") }
+                    )
+                } else {
+                    Column {
+                        OutlinedTextField(
+                            value = location,
+                            onValueChange = { location = it },
+                            label = { Text("Location") },
+                            modifier = Modifier.fillMaxWidth(),
+                            trailingIcon = {
+                                Row {
+                                    // Open Google Maps
+                                    IconButton(onClick = {
+                                        val gmmIntentUri = Uri.parse("geo:0,0?q=")
+                                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                        mapIntent.setPackage("com.google.android.apps.maps")
+                                        try {
+                                            context.startActivity(mapIntent)
+                                        } catch (e: Exception) {
+                                            val browserIntent = Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse("https://www.google.com/maps")
+                                            )
+                                            context.startActivity(browserIntent)
+                                        }
+                                    }) {
+                                        Icon(
+                                            Icons.Default.LocationOn,
+                                            contentDescription = "Open Maps",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    if (location.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            location = ""
+                                            showLocationInput = false
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = "Clear Location"
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            placeholder = { Text("Enter address or place name") }
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Tap location icon to search in Google Maps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     val startSlot = timeToSlot(selectedStartTime)
-                    onConfirm(title, selectedDayIndex, startSlot, selectedDurationSlots)
+                    onConfirm(title, selectedDayIndex, startSlot, selectedDurationSlots, location)
                 },
                 enabled = title.isNotBlank()
             ) {
@@ -613,8 +578,7 @@ fun CalendarGrid(
     googleBusySlots: Set<AvailabilitySlot>,
     googleEvents: List<GoogleCalendarEvent>,
     dayLabels: List<String>,
-    onSlotClick: (Int, Int) -> Unit,
-    onSlotLongClick: ((Int, Int) -> Unit)? = null
+    onSlotClick: (Int, Int) -> Unit
 ) {
     val horizontalScrollState = rememberScrollState()
     val verticalScrollState = rememberScrollState()
@@ -630,12 +594,11 @@ fun CalendarGrid(
             .height(550.dp)
     ) {
         Column(Modifier.width(timeAxisWidth)) {
-            Box(
-                modifier = Modifier
-                    .height(timeSlotHeight)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(0.5.dp, Color.LightGray)
+            Box(modifier = Modifier
+                .height(timeSlotHeight)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .border(0.5.dp, Color.LightGray)
             )
 
             Column(
@@ -681,12 +644,7 @@ fun CalendarGrid(
                             .border(0.5.dp, Color.LightGray),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = dayLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
+                        Text(text = dayLabel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     }
                 }
             }
