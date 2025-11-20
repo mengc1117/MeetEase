@@ -524,31 +524,46 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun confirmMeeting(suggestion: MeetingSuggestion) {
-        // Cancel any existing meeting reminder first
-        meetingReminderScheduler.cancelMeetingReminder()
-        
         val dayLabel = _uiState.value.dynamicDayLabels[suggestion.dayIndex]
         val startTime = slotToTime(suggestion.startSlot)
         val endTime = slotToTime(suggestion.startSlot + suggestion.durationSlots)
+        val timeRange = "$startTime - $endTime"
+        
+        // Cancel any existing meeting reminder for this time slot
+        val currentMeeting = _uiState.value.confirmedMeeting
+        if (currentMeeting != null) {
+            meetingReminderScheduler.cancelMeetingReminder(
+                currentMeeting.day,
+                currentMeeting.timeRange
+            )
+        }
+        
         val confirmedMeeting = ConfirmedMeeting(
             day = dayLabel,
-            timeRange = "$startTime - $endTime",
+            timeRange = timeRange,
             attendees = suggestion.availableMembers.map { MemberStatus(name = it, status = "Confirmed") }
         )
+
+        // Schedule reminder notification 10 minutes before meeting
+        val reminderScheduled = meetingReminderScheduler.scheduleMeetingReminder(
+            meetingDay = dayLabel,
+            meetingTimeRange = timeRange,
+            attendeesCount = suggestion.availableMembers.size
+        )
+        
+        val message = if (reminderScheduled) {
+            "Meeting Confirmed! Reminder scheduled for 10 minutes before."
+        } else {
+            "Meeting Confirmed! (Could not schedule reminder - check notification permissions)"
+        }
+        
         _uiState.update {
             it.copy(
                 confirmedMeeting = confirmedMeeting,
                 suggestions = emptyList(),
-                message = "Meeting Confirmed!"
+                message = message
             )
         }
-
-        // Schedule reminder notification 10 minutes before meeting
-        meetingReminderScheduler.scheduleMeetingReminder(
-            meetingDay = dayLabel,
-            meetingTimeRange = "$startTime - $endTime",
-            attendeesCount = suggestion.availableMembers.size
-        )
 
         addEventToCalendar(
             title = "MeetEase Meeting",
