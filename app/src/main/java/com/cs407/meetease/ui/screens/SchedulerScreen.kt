@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -75,9 +76,6 @@ import com.cs407.meetease.ui.theme.AppGray
 import com.cs407.meetease.ui.theme.AppGreen
 import com.cs407.meetease.ui.theme.AppGreenLight
 import com.cs407.meetease.ui.viewmodels.SchedulerViewModel
-import androidx.compose.foundation.layout.size
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,7 +155,6 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                         googleEvents = uiState.googleEvents,
                         dayLabels = uiState.dynamicDayLabels,
                         onSlotClick = { day, slot ->
-                            val slotKey = AvailabilitySlot(day, slot)
                             val event = uiState.googleEvents.firstOrNull {
                                 it.dayIndex == day && slot >= it.startSlot && slot < it.endSlot
                             }
@@ -206,6 +203,7 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
                             SuggestionCard(
                                 suggestion = suggestion,
                                 dayLabels = uiState.dynamicDayLabels,
+                                isOrganizer = uiState.isOrganizer,
                                 onConfirm = { viewModel.confirmMeeting(it) },
                                 slotToTime = viewModel::slotToTime
                             )
@@ -239,6 +237,71 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
             },
             timeToSlot = viewModel::timeToSlot
         )
+    }
+}
+
+@Composable
+fun SuggestionCard(
+    suggestion: MeetingSuggestion,
+    dayLabels: List<String>,
+    isOrganizer: Boolean,
+    onConfirm: (MeetingSuggestion) -> Unit,
+    slotToTime: (Int) -> String
+) {
+    val day = if (suggestion.dayIndex in dayLabels.indices) dayLabels[suggestion.dayIndex] else "Date Error"
+    val startTime = slotToTime(suggestion.startSlot)
+    val endTime = slotToTime(suggestion.startSlot + suggestion.durationSlots)
+
+    val isBest = suggestion.availableCount == suggestion.totalCount
+    val cardColor = if (isBest) AppGreenLight else MaterialTheme.colorScheme.surfaceVariant
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "$day, $startTime - $endTime",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${suggestion.availableCount} / ${suggestion.totalCount} Members Available",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (isBest) {
+                    Text(
+                        text = "All members available!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppGreen,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (isOrganizer) {
+                Button(onClick = { onConfirm(suggestion) }) {
+                    Icon(Icons.Filled.Check, contentDescription = "Confirm")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Select")
+                }
+            } else {
+                Text(
+                    text = "Waiting for organizer",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.End
+                )
+            }
+        }
     }
 }
 
@@ -606,60 +669,6 @@ fun CalendarGrid(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun SuggestionCard(
-    suggestion: MeetingSuggestion,
-    dayLabels: List<String>,
-    onConfirm: (MeetingSuggestion) -> Unit,
-    slotToTime: (Int) -> String
-) {
-    val day = if (suggestion.dayIndex in dayLabels.indices) dayLabels[suggestion.dayIndex] else "Date Error"
-    val startTime = slotToTime(suggestion.startSlot)
-    val endTime = slotToTime(suggestion.startSlot + suggestion.durationSlots)
-
-    val isBest = suggestion.availableCount == suggestion.totalCount
-    val cardColor = if (isBest) AppGreenLight else MaterialTheme.colorScheme.surfaceVariant
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "$day, $startTime - $endTime",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "${suggestion.availableCount} / ${suggestion.totalCount} Members Available",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                if (isBest) {
-                    Text(
-                        text = "All members available!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Button(onClick = { onConfirm(suggestion) }) {
-                Icon(Icons.Filled.Check, contentDescription = "Confirm")
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Select")
             }
         }
     }

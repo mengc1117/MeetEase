@@ -59,7 +59,7 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) {
 
     LaunchedEffect(uiState.authSuccess) {
         if (uiState.authSuccess) {
-            navController.navigate(Screen.Main.route) {
+            navController.navigate(Screen.GroupSelection.route) {
                 popUpTo(Screen.Login.route) { inclusive = true }
             }
         }

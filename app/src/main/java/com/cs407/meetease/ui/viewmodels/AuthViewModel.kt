@@ -7,6 +7,7 @@ import com.cs407.meetease.data.Member
 import com.cs407.meetease.data.User
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,7 +62,13 @@ class AuthViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
-                val userId = authResult.user?.uid ?: throw Exception("Failed to create user.")
+                val firebaseUser = authResult.user
+                val userId = firebaseUser?.uid ?: throw Exception("Failed to create user.")
+
+                val profileUpdates = userProfileChangeRequest {
+                    displayName = username
+                }
+                firebaseUser.updateProfile(profileUpdates).await()
 
                 val newGroupRef = db.collection("groups").document()
                 val newGroup = Group(
@@ -71,10 +78,16 @@ class AuthViewModel : ViewModel() {
                 )
                 newGroupRef.set(newGroup).await()
 
-                val userDoc = User(uid = userId, email = email, groupId = newGroupRef.id)
+                val userDoc = User(
+                    uid = userId,
+                    name = username,
+                    email = email,
+                    currentGroupId = newGroupRef.id,
+                    groupIds = listOf(newGroupRef.id)
+                )
                 db.collection("users").document(userId).set(userDoc).await()
 
-                val selfAsMember = Member(id = userId, name = "$username (Organizer)")
+                val selfAsMember = Member(id = userId, name = "$username (Organizer)", email = email)
                 db.collection("groups").document(newGroupRef.id)
                     .collection("members").document(userId)
                     .set(selfAsMember).await()
