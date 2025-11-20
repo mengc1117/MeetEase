@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,10 +42,8 @@ fun ProfileScreen(rootNavController: NavController) {
         if (result.resultCode == Activity.RESULT_OK) {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
-                // val account = task.getResult(ApiException::class.java)
             } catch (e: Exception) {
             }
-        } else {
         }
     }
 
@@ -101,6 +100,20 @@ fun ProfileScreen(rootNavController: NavController) {
                 .height(48.dp)
         ) {
             Text("Link/Re-link Google Calendar")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = {
+                rootNavController.navigate(Screen.GroupSelection.route) {
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text("Switch Group")
         }
 
         Spacer(modifier = Modifier.height(16.dp))

@@ -3,36 +3,20 @@ package com.cs407.meetease.ui.screens
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,20 +31,15 @@ import com.cs407.meetease.ui.theme.AppAmber
 import com.cs407.meetease.ui.theme.AppGreen
 import com.cs407.meetease.ui.theme.AppRed
 import com.cs407.meetease.ui.viewmodels.RemindersViewModel
-import com.cs407.meetease.ui.viewmodels.SchedulerUiState
-import kotlinx.coroutines.flow.StateFlow
-
 
 @Composable
 fun RemindersScreen(
-    schedulerUiState: StateFlow<SchedulerUiState>,
     remindersViewModel: RemindersViewModel
 ) {
-    val sUiState by schedulerUiState.collectAsState()
     val rUiState by remindersViewModel.uiState.collectAsState()
-    val confirmedMeeting = sUiState.confirmedMeeting
-
+    val confirmedMeeting = rUiState.confirmedMeeting
     val context = LocalContext.current
+    var showCancelDialog by remember { mutableStateOf(false) }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -72,6 +51,13 @@ fun RemindersScreen(
             }
         }
     )
+
+    LaunchedEffect(rUiState.message) {
+        rUiState.message?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            remindersViewModel.clearMessage()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -98,6 +84,19 @@ fun RemindersScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
+                if (rUiState.isOrganizer) {
+                    Button(
+                        onClick = { showCancelDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Cancel, contentDescription = "Cancel")
+                        Spacer(Modifier.width(8.dp))
+                        Text("Cancel Meeting")
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 LocationSharingCard(
                     uiState = rUiState,
                     onToggleClick = {
@@ -122,6 +121,28 @@ fun RemindersScreen(
             }
         }
     }
+
+    if (showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelDialog = false },
+            title = { Text("Cancel Meeting?") },
+            text = { Text("This will remove the meeting for everyone and delete it from your Google Calendar.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        remindersViewModel.cancelMeeting()
+                        showCancelDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Yes, Cancel")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelDialog = false }) { Text("No") }
+            }
+        )
+    }
 }
 
 private fun checkAndRequestLocationPermission(
@@ -144,7 +165,6 @@ private fun checkAndRequestLocationPermission(
     }
 }
 
-
 @Composable
 fun LocationSharingCard(
     uiState: com.cs407.meetease.ui.viewmodels.RemindersUiState,
@@ -158,26 +178,14 @@ fun LocationSharingCard(
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "Live Location",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Text("Live Location", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                uiState.sharingStatus,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(uiState.sharingStatus, style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onToggleClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Button(onClick = onToggleClick, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.LocationOn, contentDescription = "Location")
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    if (uiState.isSharingLocation) "Stop Sharing"
-                    else "Share Live Location"
-                )
+                Text(if (uiState.isSharingLocation) "Stop Sharing" else "Share Live Location")
             }
         }
     }
@@ -186,35 +194,15 @@ fun LocationSharingCard(
 @Composable
 fun NoMeetingCard() {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "No Meetings",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp)
-            )
+        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.Info, "No Meetings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "No Confirmed Meetings",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Text("No Confirmed Meetings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Go to the 'Scheduler' tab to find and confirm meetings.",
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text("Go to the 'Scheduler' tab to find and confirm meetings.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -223,9 +211,7 @@ fun NoMeetingCard() {
 fun ConfirmedMeetingCard(day: String, timeRange: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Confirmed Meeting", style = MaterialTheme.typography.titleMedium)
@@ -239,9 +225,7 @@ fun ConfirmedMeetingCard(day: String, timeRange: String) {
 @Composable
 fun MemberStatusCard(status: MemberStatus) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
@@ -249,23 +233,10 @@ fun MemberStatusCard(status: MemberStatus) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = status.name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = status.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val color = when (status.status) {
-                    "Confirmed" -> AppGreen
-                    "Running Late" -> AppAmber
-                    else -> AppRed
-                }
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                )
+                val color = when (status.status) { "Confirmed" -> AppGreen; "Running Late" -> AppAmber; else -> AppRed }
+                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = status.status)
             }

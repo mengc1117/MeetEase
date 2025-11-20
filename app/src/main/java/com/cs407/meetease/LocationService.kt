@@ -72,7 +72,7 @@ class LocationService : Service() {
         serviceScope.launch {
             try {
                 val userDoc = db!!.collection("users").document(userId!!).get().await()
-                groupId = userDoc.getString("groupId")
+                groupId = userDoc.getString("currentGroupId")
 
                 if (groupId == null) {
                     Log.e(TAG, "User has no group, stopping service.")

@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object SignUp : Screen("signup")
+    object GroupSelection : Screen("group_selection")
     object Main : Screen("main")
 }
 
@@ -39,11 +40,9 @@ sealed class BottomNavScreen(
         title = "Map",
         icon = Icons.Filled.Map
     )
-
     object Profile : BottomNavScreen(
         route = "profile",
         title = "Profile",
         icon = Icons.Filled.Person
     )
-
 }

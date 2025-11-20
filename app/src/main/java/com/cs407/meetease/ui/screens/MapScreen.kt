@@ -1,7 +1,8 @@
 package com.cs407.meetease.ui.screens
-import com.cs407.meetease.data.Member
 
 import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -22,12 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.cs407.meetease.ui.viewmodels.MapViewModel
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.ktx.Firebase
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
@@ -39,14 +41,19 @@ import com.google.maps.android.compose.rememberCameraPositionState
 @Composable
 fun MapScreen(viewModel: MapViewModel) {
     val uiState by viewModel.uiState.collectAsState()
-    val currentUserId = Firebase.auth.currentUser?.uid
+    val context = LocalContext.current
 
     val defaultLocation = LatLng(43.0731, -89.4012)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(defaultLocation, 12f)
     }
 
-    var hasLocationPermission by remember { mutableStateOf(false) }
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        )
+    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -55,31 +62,25 @@ fun MapScreen(viewModel: MapViewModel) {
                 permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
             ) {
                 hasLocationPermission = true
-            } else {
-                hasLocationPermission = false
             }
         }
     )
 
     LaunchedEffect(Unit) {
-        locationPermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+        if (!hasLocationPermission) {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
             )
-        )
+        }
     }
 
-    LaunchedEffect(uiState.membersWithLocation) {
-        val currentUserLocation = uiState.membersWithLocation
-            .firstOrNull { it.id == currentUserId }
-            ?.location
-
-        currentUserLocation?.let { geoPoint ->
-            val userPosition = LatLng(geoPoint.latitude, geoPoint.longitude)
-
+    LaunchedEffect(uiState.meetingDestination) {
+        uiState.meetingDestination?.let { dest ->
             cameraPositionState.animate(
-                update = CameraUpdateFactory.newLatLngZoom(userPosition, 15f),
+                update = CameraUpdateFactory.newLatLngZoom(LatLng(dest.latitude, dest.longitude), 14f),
                 durationMs = 1000
             )
         }
@@ -87,7 +88,14 @@ fun MapScreen(viewModel: MapViewModel) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Member Live Location") })
+            TopAppBar(
+                title = {
+                    if (uiState.isOrganizer)
+                        Text("Map (Long press to set Destination)")
+                    else
+                        Text("Group Map")
+                }
+            )
         }
     ) { paddingValues ->
         Box(
@@ -108,11 +116,17 @@ fun MapScreen(viewModel: MapViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     cameraPositionState = cameraPositionState,
                     properties = MapProperties(
-                        isMyLocationEnabled = hasLocationPermission
+                        isMyLocationEnabled = hasLocationPermission // 这里的状态必须是 true 才能显示蓝点
                     ),
                     uiSettings = MapUiSettings(
                         myLocationButtonEnabled = hasLocationPermission
-                    )
+                    ),
+                    onMapLongClick = { latLng ->
+                        if (uiState.isOrganizer) {
+                            viewModel.setMeetingDestination(latLng)
+                            Toast.makeText(context, "Meeting Destination Updated!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 ) {
                     uiState.membersWithLocation.forEach { member ->
                         member.location?.let { geoPoint ->
@@ -120,9 +134,19 @@ fun MapScreen(viewModel: MapViewModel) {
                             Marker(
                                 state = MarkerState(position = position),
                                 title = member.name,
-                                snippet = "Live location"
+                                snippet = "Last updated location",
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)
                             )
                         }
+                    }
+
+                    uiState.meetingDestination?.let { dest ->
+                        Marker(
+                            state = MarkerState(position = LatLng(dest.latitude, dest.longitude)),
+                            title = "Meeting Destination",
+                            snippet = "See you here!",
+                            icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+                        )
                     }
                 }
             }

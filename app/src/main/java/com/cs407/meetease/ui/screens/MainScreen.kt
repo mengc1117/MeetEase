@@ -85,18 +85,15 @@ fun MainScreen(rootNavController: NavController) {
             }
             composable(BottomNavScreen.Reminders.route) {
                 RemindersScreen(
-                    schedulerUiState = schedulerViewModel.uiState,
                     remindersViewModel = remindersViewModel
                 )
             }
             composable(BottomNavScreen.Map.route) {
                 MapScreen(mapViewModel)
             }
-
             composable(BottomNavScreen.Profile.route) {
                 ProfileScreen(rootNavController = rootNavController)
             }
-
         }
     }
 }

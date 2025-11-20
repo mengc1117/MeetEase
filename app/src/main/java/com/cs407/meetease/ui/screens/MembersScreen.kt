@@ -1,13 +1,14 @@
 package com.cs407.meetease.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,10 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -49,15 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.cs407.meetease.data.Member
 import com.cs407.meetease.ui.theme.AppGray
 import com.cs407.meetease.ui.viewmodels.MembersViewModel
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 
 
 @Composable
@@ -67,6 +68,8 @@ fun MembersScreen(viewModel: MembersViewModel) {
     var showContactsDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -97,7 +100,7 @@ fun MembersScreen(viewModel: MembersViewModel) {
         ) {
             item {
                 Text(
-                    text = "Actions",
+                    text = "Invite & Manage",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
@@ -121,16 +124,28 @@ fun MembersScreen(viewModel: MembersViewModel) {
                         }
                     }
                 )
+
                 ActionCard(
-                    title = "Share Invite Link",
-                    icon = Icons.Filled.ContentCopy,
-                    onClick = { }
+                    title = "Share Invite Code",
+                    icon = Icons.Filled.Share,
+                    onClick = {
+                        val gid = viewModel.getGroupId()
+                        if (gid != null) {
+                            clipboardManager.setText(AnnotatedString(gid))
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, "Join my group on MeetEase! ID: $gid")
+                                type = "text/plain"
+                            }
+                            val shareIntent = Intent.createChooser(sendIntent, "Share Group ID")
+                            context.startActivity(shareIntent)
+                            Toast.makeText(context, "Group ID copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.showErrorMessage("Group ID not loaded yet.")
+                        }
+                    }
                 )
-                ActionCard(
-                    title = "Remind Pending Members",
-                    icon = Icons.Filled.Notifications,
-                    onClick = { }
-                )
+
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Current Members (${uiState.members.size})",
@@ -141,6 +156,8 @@ fun MembersScreen(viewModel: MembersViewModel) {
             items(uiState.members) { member ->
                 MemberCard(
                     member = member,
+                    isCurrentUserOrganizer = uiState.isCurrentUserOrganizer,
+                    showDelete = uiState.isCurrentUserOrganizer && !member.name.contains("(Organizer)"),
                     onRemove = { viewModel.removeMember(member) }
                 )
             }
@@ -179,7 +196,12 @@ fun ActionCard(
 }
 
 @Composable
-fun MemberCard(member: Member, onRemove: () -> Unit) {
+fun MemberCard(
+    member: Member,
+    isCurrentUserOrganizer: Boolean,
+    showDelete: Boolean,
+    onRemove: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -201,16 +223,31 @@ fun MemberCard(member: Member, onRemove: () -> Unit) {
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
+                    val initial = if (member.name.isNotBlank()) member.name.first().toString().uppercase() else "?"
                     Text(
-                        text = member.name.first().toString(),
+                        text = initial,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(member.name, style = MaterialTheme.typography.bodyLarge)
+                Column {
+                    Text(
+                        text = if (member.name.isNotBlank()) member.name else "Unknown Member",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    if (member.name.contains("(Organizer)")) {
+                        Text(
+                            "Admin",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
-            if (member.id != "user_1") {
+
+            if (showDelete) {
                 IconButton(onClick = onRemove) {
                     Icon(
                         Icons.Filled.Delete,
@@ -218,13 +255,6 @@ fun MemberCard(member: Member, onRemove: () -> Unit) {
                         tint = Color.Red
                     )
                 }
-            } else {
-                Text(
-                    "Organizer",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
     }
@@ -240,13 +270,17 @@ fun ContactsDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add from Contacts") },
         text = {
-            LazyColumn {
-                items(contacts) { contact ->
-                    TextButton(
-                        onClick = { onContactSelected(contact) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(contact.name, modifier = Modifier.fillMaxWidth())
+            if (contacts.isEmpty()) {
+                Text("No contacts found with phone numbers.")
+            } else {
+                LazyColumn {
+                    items(contacts) { contact ->
+                        TextButton(
+                            onClick = { onContactSelected(contact) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(contact.name, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 }
             }
