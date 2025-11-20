@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import kotlin.system.exitProcess
 import com.cs407.meetease.navigation.Screen
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -120,13 +121,13 @@ fun ProfileScreen(rootNavController: NavController) {
 
         Button(
             onClick = {
+                // Sign out from both Firebase and Google
                 FirebaseAuth.getInstance().signOut()
                 googleSignInClient.signOut()
 
+                // Navigate to login and clear entire back stack
                 rootNavController.navigate(Screen.Login.route) {
-                    popUpTo(Screen.Main.route) {
-                        inclusive = true
-                    }
+                    popUpTo(0) { inclusive = true }
                 }
             },
             modifier = Modifier

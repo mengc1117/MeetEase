@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.cs407.meetease.navigation.Screen
 import com.cs407.meetease.ui.viewmodels.AuthViewModel
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 @Composable
@@ -47,6 +48,15 @@ fun LoginScreen(navController: NavController, authViewModel: AuthViewModel) {
     val uiState by authViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Check if user is already logged in and navigate to GroupSelection
+    LaunchedEffect(Unit) {
+        if (FirebaseAuth.getInstance().currentUser != null) {
+            navController.navigate(Screen.GroupSelection.route) {
+                popUpTo(Screen.Login.route) { inclusive = true }
+            }
+        }
+    }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {

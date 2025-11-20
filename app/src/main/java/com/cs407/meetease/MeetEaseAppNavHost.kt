@@ -20,11 +20,8 @@ fun MeetEaseAppNavHost() {
     val authViewModel: AuthViewModel = viewModel()
     val groupViewModel: GroupViewModel = viewModel()
 
-    val startDestination = if (FirebaseAuth.getInstance().currentUser != null) {
-        Screen.GroupSelection.route
-    } else {
-        Screen.Login.route
-    }
+    // Always start at Login screen - it will handle navigation if user is already logged in
+    val startDestination = Screen.Login.route
 
     NavHost(navController = navController, startDestination = startDestination) {
         composable(Screen.Login.route) {
