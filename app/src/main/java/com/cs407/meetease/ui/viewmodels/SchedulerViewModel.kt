@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs407.meetease.data.*
 import com.cs407.meetease.utils.MeetingReminderScheduler
+import com.cs407.meetease.utils.VoiceCommandParser
+import com.cs407.meetease.utils.CommandAction
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.javanet.NetHttpTransport
@@ -606,6 +608,79 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         val minute = parts[1].toIntOrNull() ?: 0
 
         return (hour - START_HOUR) * SLOTS_PER_HOUR + (minute / (60 / SLOTS_PER_HOUR))
+    }
+
+    fun processVoiceCommand(speechText: String) {
+        val parser = VoiceCommandParser()
+        val command = parser.parse(speechText)
+
+        // Update duration if specified
+        command.durationSlots?.let { duration ->
+            _uiState.update { it.copy(selectedDurationSlots = duration) }
+        }
+
+        // Execute action if specified
+        when (command.action) {
+            CommandAction.FIND_TIMES -> {
+                findBestMeetingTimes()
+                val durationText = command.durationSlots?.let { 
+                    val hours = it / 2.0
+                    if (hours == hours.toInt().toDouble()) {
+                        "${hours.toInt()} hour"
+                    } else {
+                        "$hours hour"
+                    }
+                }
+                val message = if (durationText != null) {
+                    "Finding $durationText meeting times..."
+                } else {
+                    "Finding available meeting times..."
+                }
+                _uiState.update { it.copy(message = message) }
+            }
+            CommandAction.SELECT_SUGGESTION -> {
+                val selectionIndex = (command.selectionNumber ?: 1) - 1
+                val suggestions = _uiState.value.suggestions
+                
+                if (suggestions.isEmpty()) {
+                    _uiState.update { it.copy(message = "No suggestions available. Say 'Find meeting times' first.") }
+                } else if (selectionIndex < 0 || selectionIndex >= suggestions.size) {
+                    _uiState.update { it.copy(message = "Suggestion ${command.selectionNumber} not found. Available: 1-${suggestions.size}") }
+                } else {
+                    val selectedSuggestion = suggestions[selectionIndex]
+                    confirmMeeting(selectedSuggestion)
+                    _uiState.update { it.copy(message = "Confirming meeting option ${command.selectionNumber}...") }
+                }
+            }
+            CommandAction.MARK_AVAILABILITY -> {
+                val dayIndex = command.dayIndex
+                val timeSlot = command.timeSlot
+                
+                if (dayIndex != null && timeSlot != null) {
+                    toggleAvailability(dayIndex, timeSlot)
+                    val dayLabel = _uiState.value.dynamicDayLabels.getOrNull(dayIndex) ?: "Day $dayIndex"
+                    val timeLabel = slotToTime(timeSlot)
+                    val status = if (command.markAvailable) "available" else "unavailable"
+                    _uiState.update { it.copy(message = "Marked $status: $dayLabel at $timeLabel") }
+                } else {
+                    _uiState.update { it.copy(message = "Could not parse time. Try: 'Mark Monday 2 PM available'") }
+                }
+            }
+            null -> {
+                // Just duration change, no action
+                if (command.durationSlots != null) {
+                    val hours = command.durationSlots / 2.0
+                    val durationText = if (hours == hours.toInt().toDouble()) {
+                        "${hours.toInt()} hour"
+                    } else {
+                        "$hours hour"
+                    }
+                    _uiState.update { it.copy(message = "Duration set to $durationText") }
+                } else {
+                    _uiState.update { it.copy(message = "Command not recognized. Try: 'Mark Monday 2 PM available', 'Find meetings', or 'Select first'") }
+                }
+            }
+        }
     }
 
     override fun onCleared() {
