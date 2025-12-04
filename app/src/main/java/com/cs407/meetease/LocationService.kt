@@ -59,7 +59,8 @@ class LocationService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun start() {
-        if (userId == null) {
+        val currentUserId = userId
+        if (currentUserId == null) {
             Log.e(TAG, "User not logged in, stopping service.")
             stop()
             return
@@ -71,7 +72,13 @@ class LocationService : Service() {
 
         serviceScope.launch {
             try {
-                val userDoc = db!!.collection("users").document(userId!!).get().await()
+                val database = db ?: run {
+                    Log.e(TAG, "Database not initialized, stopping service.")
+                    stop()
+                    return@launch
+                }
+
+                val userDoc = database.collection("users").document(currentUserId).get().await()
                 groupId = userDoc.getString("currentGroupId")
 
                 if (groupId == null) {
@@ -120,18 +127,20 @@ class LocationService : Service() {
     }
 
     private fun updateLocationInFirestore(geoPoint: GeoPoint) {
-        if (userId != null && groupId != null) {
-            serviceScope.launch {
-                try {
-                    Log.d(TAG, "LocationService: Writing to Firestore at path: groups/$groupId/members/$userId")
-                    db!!.collection("groups").document(groupId!!)
-                        .collection("members").document(userId!!)
-                        .update("location", geoPoint)
-                        .await()
-                    Log.d(TAG, "LocationService: Firestore write successful.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "LocationService: FAILED to update location in Firestore", e)
-                }
+        val currentUserId = userId ?: return
+        val currentGroupId = groupId ?: return
+        val database = db ?: return
+
+        serviceScope.launch {
+            try {
+                Log.d(TAG, "LocationService: Writing to Firestore at path: groups/$currentGroupId/members/$currentUserId")
+                database.collection("groups").document(currentGroupId)
+                    .collection("members").document(currentUserId)
+                    .update("location", geoPoint)
+                    .await()
+                Log.d(TAG, "LocationService: Firestore write successful.")
+            } catch (e: Exception) {
+                Log.e(TAG, "LocationService: FAILED to update location in Firestore", e)
             }
         }
     }
@@ -152,21 +161,22 @@ class LocationService : Service() {
     }
 
     private fun removeLocationFromFirestore() {
-        if (userId != null && groupId != null) {
-            serviceScope.launch {
-                try {
-                    Log.d(TAG, "LocationService: Removing location from Firestore.")
-                    db!!.collection("groups").document(groupId!!)
-                        .collection("members").document(userId!!)
-                        .update("location", FieldValue.delete())
-                        .await()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to remove location from Firestore", e)
-                }
+        val currentUserId = userId ?: return
+        val currentGroupId = groupId ?: return
+        val database = db ?: return
+
+        serviceScope.launch {
+            try {
+                Log.d(TAG, "LocationService: Removing location from Firestore.")
+                database.collection("groups").document(currentGroupId)
+                    .collection("members").document(currentUserId)
+                    .update("location", FieldValue.delete())
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to remove location from Firestore", e)
             }
         }
     }
-
 
     override fun onDestroy() {
         super.onDestroy()

@@ -64,7 +64,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     private val auth = Firebase.auth
     private var groupId: String? = null
     private val userId = auth.currentUser?.uid
-    
+
     private val meetingReminderScheduler = MeetingReminderScheduler(application)
 
     private var cachedMembers: List<Member> = emptyList()
@@ -78,6 +78,8 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     private val dayFormatter = DateTimeFormatter.ofPattern("EEE M/d")
 
     companion object {
+        private const val TAG = "SchedulerViewModel"
+        
         val TIMES = List(16) { "${it + 8}:00" }
         const val SLOTS_PER_HOUR = 2
         const val TOTAL_SLOTS_PER_DAY = 16 * SLOTS_PER_HOUR
@@ -102,7 +104,8 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun loadUserAndGroupData() {
-        if (userId == null) {
+        val currentUserId = userId
+        if (currentUserId == null) {
             _uiState.update { it.copy(message = "User not logged in.", isLoading = false) }
             return
         }
@@ -110,7 +113,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val userDoc = db.collection("users").document(userId).get().await()
+                val userDoc = db.collection("users").document(currentUserId).get().await()
                 val newGroupId = userDoc.getString("currentGroupId")
 
                 if (newGroupId == null) {
@@ -137,7 +140,10 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
 
         groupListener = db.collection("groups").document(groupId)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
+                if (error != null) {
+                    Log.e(TAG, "Error listening to group", error)
+                    return@addSnapshotListener
+                }
                 if (snapshot != null && snapshot.exists()) {
                     val group = snapshot.toObject<Group>()
                     val isOrganizer = group?.organizerId == userId
@@ -149,13 +155,22 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                     syncGoogleCalendarBusySlots()
                 } else {
-                    _uiState.update { it.copy(confirmedMeeting = null, members = emptyList(), message = "Group no longer exists.") }
+                    _uiState.update {
+                        it.copy(
+                            confirmedMeeting = null,
+                            members = emptyList(),
+                            message = "Group no longer exists."
+                        )
+                    }
                 }
             }
 
         membersListener = db.collection("groups").document(groupId).collection("members")
             .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
+                if (error != null) {
+                    Log.e(TAG, "Error listening to members", error)
+                    return@addSnapshotListener
+                }
                 if (snapshot != null) {
                     val members = snapshot.toObjects<Member>()
                     cachedMembers = members
@@ -165,7 +180,10 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
 
         availabilityListener = db.collection("groups").document(groupId).collection("availability")
             .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
+                if (error != null) {
+                    Log.e(TAG, "Error listening to availability", error)
+                    return@addSnapshotListener
+                }
                 if (snapshot != null) {
                     val newAvailabilities = mutableMapOf<String, List<AvailabilitySlot>>()
                     snapshot.documents.forEach { doc ->
@@ -190,7 +208,13 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
             member.copy(availability = slots.toMutableList())
         }
         val updatedCurrentUser = mergedMembers.firstOrNull { it.id == userId }
-        _uiState.update { it.copy(members = mergedMembers, currentUser = updatedCurrentUser, isLoading = false) }
+        _uiState.update {
+            it.copy(
+                members = mergedMembers,
+                currentUser = updatedCurrentUser,
+                isLoading = false
+            )
+        }
     }
 
     fun toggleAvailability(dayIndex: Int, slotIndex: Int) {
@@ -207,7 +231,11 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         val newAvailabilityList = ArrayList(currentList)
         val isAvailable = newAvailabilityList.contains(slot)
 
-        if (isAvailable) newAvailabilityList.remove(slot) else newAvailabilityList.add(slot)
+        if (isAvailable) {
+            newAvailabilityList.remove(slot)
+        } else {
+            newAvailabilityList.add(slot)
+        }
 
         _uiState.update {
             val updatedUser = it.currentUser?.copy(availability = newAvailabilityList)
@@ -216,13 +244,18 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
 
         viewModelScope.launch {
             try {
-                val docRef = db.collection("groups").document(gId).collection("availability").document(uId)
+                val docRef = db.collection("groups").document(gId)
+                    .collection("availability").document(uId)
                 if (isAvailable) {
                     docRef.update("slots", FieldValue.arrayRemove(slot))
                 } else {
-                    docRef.set(mapOf("slots" to FieldValue.arrayUnion(slot)), com.google.firebase.firestore.SetOptions.merge())
+                    docRef.set(
+                        mapOf("slots" to FieldValue.arrayUnion(slot)),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "Error toggling availability", e)
                 _uiState.update { it.copy(message = e.message) }
             }
         }
@@ -280,9 +313,21 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     "Meeting Confirmed & Invites Sent! (Reminder could not be scheduled)"
                 }
 
-                _uiState.update { it.copy(suggestions = emptyList(), message = message, isLoading = false) }
+                _uiState.update {
+                    it.copy(
+                        suggestions = emptyList(),
+                        message = message,
+                        isLoading = false
+                    )
+                }
             } catch (e: Exception) {
-                _uiState.update { it.copy(message = "Failed to save meeting: ${e.message}", isLoading = false) }
+                Log.e(TAG, "Error confirming meeting", e)
+                _uiState.update {
+                    it.copy(
+                        message = "Failed to save meeting: ${e.message}",
+                        isLoading = false
+                    )
+                }
             }
         }
     }
@@ -306,8 +351,16 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 val context = getApplication<Application>().applicationContext
                 val account = GoogleSignIn.getLastSignedInAccount(context) ?: return@withContext null
 
-                val credential = GoogleAccountCredential.usingOAuth2(context, setOf(CalendarScopes.CALENDAR)).setSelectedAccount(account.account)
-                val service = Calendar.Builder(NetHttpTransport(), GsonFactory.getDefaultInstance(), credential).setApplicationName("MeetEase").build()
+                val credential = GoogleAccountCredential.usingOAuth2(
+                    context,
+                    setOf(CalendarScopes.CALENDAR)
+                ).setSelectedAccount(account.account)
+
+                val service = Calendar.Builder(
+                    NetHttpTransport(),
+                    GsonFactory.getDefaultInstance(),
+                    credential
+                ).setApplicationName("MeetEase").build()
 
                 val event = Event().apply {
                     summary = title
@@ -330,8 +383,14 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     calendar.set(java.util.Calendar.MINUTE, endMinute)
                     val endDateTime = DateTime(calendar.time)
 
-                    start = EventDateTime().apply { dateTime = startDateTime; timeZone = TimeZone.getDefault().id }
-                    end = EventDateTime().apply { dateTime = endDateTime; timeZone = TimeZone.getDefault().id }
+                    start = EventDateTime().apply {
+                        dateTime = startDateTime
+                        timeZone = TimeZone.getDefault().id
+                    }
+                    end = EventDateTime().apply {
+                        dateTime = endDateTime
+                        timeZone = TimeZone.getDefault().id
+                    }
 
                     if (attendeeEmails.isNotEmpty()) {
                         attendees = attendeeEmails.map { EventAttendee().setEmail(it) }
@@ -343,7 +402,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 return@withContext createdEvent.id
 
             } catch (e: Exception) {
-                Log.e("SchedulerViewModel", "Failed to create calendar event", e)
+                Log.e(TAG, "Failed to create calendar event", e)
                 return@withContext null
             }
         }
@@ -385,9 +444,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         return slots.toList()
     }
 
-    private fun convertUtcToLocalEvent(
-        event: Event
-    ): List<GoogleCalendarEvent> {
+    private fun convertUtcToLocalEvent(event: Event): List<GoogleCalendarEvent> {
         val eventsList = mutableListOf<GoogleCalendarEvent>()
         val systemZone = ZoneId.systemDefault()
 
@@ -404,8 +461,10 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         val eventDate = startLocalTime.toLocalDate()
         val dayIndex = ChronoUnit.DAYS.between(todayDate, eventDate).toInt()
 
-        val startHourSlot = (startLocalTime.hour - START_HOUR) * SLOTS_PER_HOUR + (startLocalTime.minute / (60 / SLOTS_PER_HOUR))
-        val endHourSlot = (endLocalTime.hour - START_HOUR) * SLOTS_PER_HOUR + (endLocalTime.minute / (60 / SLOTS_PER_HOUR))
+        val startHourSlot = (startLocalTime.hour - START_HOUR) * SLOTS_PER_HOUR +
+                (startLocalTime.minute / (60 / SLOTS_PER_HOUR))
+        val endHourSlot = (endLocalTime.hour - START_HOUR) * SLOTS_PER_HOUR +
+                (endLocalTime.minute / (60 / SLOTS_PER_HOUR))
 
         val timeRange = "${slotToTime(startHourSlot)} - ${slotToTime(endHourSlot)}"
 
@@ -438,9 +497,11 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                         setOf(CalendarScopes.CALENDAR_READONLY)
                     ).setSelectedAccount(account.account)
 
-                    val service = Calendar.Builder(NetHttpTransport(), GsonFactory.getDefaultInstance(), credential)
-                        .setApplicationName("MeetEase")
-                        .build()
+                    val service = Calendar.Builder(
+                        NetHttpTransport(),
+                        GsonFactory.getDefaultInstance(),
+                        credential
+                    ).setApplicationName("MeetEase").build()
 
                     val startOfToday = today.atStartOfDay(ZoneId.systemDefault())
                     val endOfQuery = startOfToday.plusDays(NUM_DAYS_TO_SHOW.toLong())
@@ -456,7 +517,9 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
 
                     events.items?.forEach { event ->
                         if (event.start?.dateTime != null && event.end?.dateTime != null) {
-                            busySlots.addAll(convertUtcToLocalSlot(event.start.dateTime, event.end.dateTime))
+                            busySlots.addAll(
+                                convertUtcToLocalSlot(event.start.dateTime, event.end.dateTime)
+                            )
                             eventsDetails.addAll(convertUtcToLocalEvent(event))
                         }
                     }
@@ -473,7 +536,15 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                                 for (s in startSlot until endSlot) {
                                     busySlots.add(AvailabilitySlot(index, s))
                                 }
-                                eventsDetails.add(GoogleCalendarEvent(index, startSlot, endSlot, "CONFIRMED", confirmed.timeRange))
+                                eventsDetails.add(
+                                    GoogleCalendarEvent(
+                                        dayIndex = index,
+                                        startSlot = startSlot,
+                                        endSlot = endSlot,
+                                        title = "CONFIRMED",
+                                        timeRange = confirmed.timeRange
+                                    )
+                                )
                             }
                         }
                     }
@@ -488,7 +559,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
             } catch (e: Exception) {
-                Log.e("SchedulerViewModel", "Failed to sync GCal", e)
+                Log.e(TAG, "Failed to sync GCal", e)
             }
         }
     }
@@ -518,11 +589,15 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 var memberAvailability = member.availability.toSet()
 
                 if (member.id == currentUser?.id) {
-                    memberAvailability = memberAvailability.filterNot { googleBusySlots.contains(it) }.toSet()
+                    memberAvailability = memberAvailability
+                        .filterNot { googleBusySlots.contains(it) }
+                        .toSet()
                 }
 
                 for (slot in memberAvailability) {
-                    if (slot.dayIndex in 0 until NUM_DAYS_TO_SHOW && slot.slotIndex in 0 until TOTAL_SLOTS_PER_DAY) {
+                    if (slot.dayIndex in 0 until NUM_DAYS_TO_SHOW &&
+                        slot.slotIndex in 0 until TOTAL_SLOTS_PER_DAY
+                    ) {
                         overlapGrid[slot.dayIndex][slot.slotIndex]++
                     }
                 }
@@ -544,12 +619,11 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     if (minAvailableCount > 0) {
                         val availableNames = members
                             .filter { member ->
-                                val memberAvail = (
-                                        if(member.id == currentUser?.id)
-                                            member.availability.filterNot { googleBusySlots.contains(it) }
-                                        else
-                                            member.availability
-                                        ).toSet()
+                                val memberAvail = if (member.id == currentUser?.id) {
+                                    member.availability.filterNot { googleBusySlots.contains(it) }
+                                } else {
+                                    member.availability
+                                }.toSet()
 
                                 (startSlot..endSlot).all { slotIndex ->
                                     memberAvail.contains(AvailabilitySlot(day, slotIndex))
@@ -557,7 +631,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                             }
                             .map { it.name }
 
-                        if(availableNames.isNotEmpty()) {
+                        if (availableNames.isNotEmpty()) {
                             suggestions.add(
                                 MeetingSuggestion(
                                     dayIndex = day,
@@ -586,7 +660,11 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 it.copy(
                     isLoading = false,
                     suggestions = finalSuggestions,
-                    message = if (finalSuggestions.isEmpty()) "No suitable meeting times found for this duration." else null
+                    message = if (finalSuggestions.isEmpty()) {
+                        "No suitable meeting times found for this duration."
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -596,16 +674,17 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update { it.copy(message = null) }
     }
 
+    // FIX: Using Kotlin-idiomatic string formatting
     fun slotToTime(slot: Int): String {
         val hour = (slot / SLOTS_PER_HOUR) + START_HOUR
         val minute = (slot % SLOTS_PER_HOUR) * 30
-        return String.format("%02d:%02d", hour, minute)
+        return "%02d:%02d".format(hour, minute)
     }
 
     fun timeToSlot(time: String): Int {
         val parts = time.split(":")
         val hour = parts[0].toIntOrNull() ?: START_HOUR
-        val minute = parts[1].toIntOrNull() ?: 0
+        val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
 
         return (hour - START_HOUR) * SLOTS_PER_HOUR + (minute / (60 / SLOTS_PER_HOUR))
     }
@@ -623,7 +702,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
         when (command.action) {
             CommandAction.FIND_TIMES -> {
                 findBestMeetingTimes()
-                val durationText = command.durationSlots?.let { 
+                val durationText = command.durationSlots?.let {
                     val hours = it / 2.0
                     if (hours == hours.toInt().toDouble()) {
                         "${hours.toInt()} hour"
@@ -638,24 +717,36 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 _uiState.update { it.copy(message = message) }
             }
+
             CommandAction.SELECT_SUGGESTION -> {
                 val selectionIndex = (command.selectionNumber ?: 1) - 1
                 val suggestions = _uiState.value.suggestions
-                
-                if (suggestions.isEmpty()) {
-                    _uiState.update { it.copy(message = "No suggestions available. Say 'Find meeting times' first.") }
-                } else if (selectionIndex < 0 || selectionIndex >= suggestions.size) {
-                    _uiState.update { it.copy(message = "Suggestion ${command.selectionNumber} not found. Available: 1-${suggestions.size}") }
-                } else {
-                    val selectedSuggestion = suggestions[selectionIndex]
-                    confirmMeeting(selectedSuggestion)
-                    _uiState.update { it.copy(message = "Confirming meeting option ${command.selectionNumber}...") }
+
+                when {
+                    suggestions.isEmpty() -> {
+                        _uiState.update {
+                            it.copy(message = "No suggestions available. Say 'Find meeting times' first.")
+                        }
+                    }
+                    selectionIndex < 0 || selectionIndex >= suggestions.size -> {
+                        _uiState.update {
+                            it.copy(message = "Suggestion ${command.selectionNumber} not found. Available: 1-${suggestions.size}")
+                        }
+                    }
+                    else -> {
+                        val selectedSuggestion = suggestions[selectionIndex]
+                        confirmMeeting(selectedSuggestion)
+                        _uiState.update {
+                            it.copy(message = "Confirming meeting option ${command.selectionNumber}...")
+                        }
+                    }
                 }
             }
+
             CommandAction.MARK_AVAILABILITY -> {
                 val dayIndex = command.dayIndex
                 val timeSlot = command.timeSlot
-                
+
                 if (dayIndex != null && timeSlot != null) {
                     toggleAvailability(dayIndex, timeSlot)
                     val dayLabel = _uiState.value.dynamicDayLabels.getOrNull(dayIndex) ?: "Day $dayIndex"
@@ -663,9 +754,12 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     val status = if (command.markAvailable) "available" else "unavailable"
                     _uiState.update { it.copy(message = "Marked $status: $dayLabel at $timeLabel") }
                 } else {
-                    _uiState.update { it.copy(message = "Could not parse time. Try: 'Mark Monday 2 PM available'") }
+                    _uiState.update {
+                        it.copy(message = "Could not parse time. Try: 'Mark Monday 2 PM available'")
+                    }
                 }
             }
+
             null -> {
                 // Just duration change, no action
                 if (command.durationSlots != null) {
@@ -677,7 +771,11 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                     _uiState.update { it.copy(message = "Duration set to $durationText") }
                 } else {
-                    _uiState.update { it.copy(message = "Command not recognized. Try: 'Mark Monday 2 PM available', 'Find meetings', or 'Select first'") }
+                    _uiState.update {
+                        it.copy(
+                            message = "Command not recognized. Try: 'Mark Monday 2 PM available', 'Find meetings', or 'Select first'"
+                        )
+                    }
                 }
             }
         }

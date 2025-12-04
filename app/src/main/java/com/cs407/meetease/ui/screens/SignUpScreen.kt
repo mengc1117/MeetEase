@@ -37,9 +37,10 @@ fun SignUpScreen(navController: NavController, authViewModel: AuthViewModel) {
         }
     }
 
+    // FIX: Navigate to GroupSelection instead of Main for consistency with LoginScreen
     LaunchedEffect(uiState.authSuccess) {
         if (uiState.authSuccess) {
-            navController.navigate(Screen.Main.route) {
+            navController.navigate(Screen.GroupSelection.route) {
                 popUpTo(Screen.Login.route) { inclusive = true }
             }
         }

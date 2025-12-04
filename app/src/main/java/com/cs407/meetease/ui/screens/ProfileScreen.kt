@@ -1,6 +1,7 @@
 package com.cs407.meetease.ui.screens
 
 import android.app.Activity
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +23,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import kotlin.system.exitProcess
 import com.cs407.meetease.navigation.Screen
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -30,6 +30,8 @@ import com.google.android.gms.common.api.Scope
 import com.google.api.services.calendar.CalendarScopes
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
+
+private const val TAG = "ProfileScreen"
 
 @Composable
 fun ProfileScreen(rootNavController: NavController) {
@@ -43,8 +45,13 @@ fun ProfileScreen(rootNavController: NavController) {
         if (result.resultCode == Activity.RESULT_OK) {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
+                val account = task.result
+                Log.d(TAG, "Google Calendar linked successfully: ${account?.email}")
             } catch (e: Exception) {
+                Log.e(TAG, "Google sign-in failed", e)
             }
+        } else {
+            Log.w(TAG, "Google sign-in cancelled or failed with code: ${result.resultCode}")
         }
     }
 
@@ -107,8 +114,7 @@ fun ProfileScreen(rootNavController: NavController) {
 
         OutlinedButton(
             onClick = {
-                rootNavController.navigate(Screen.GroupSelection.route) {
-                }
+                rootNavController.navigate(Screen.GroupSelection.route)
             },
             modifier = Modifier
                 .fillMaxWidth()

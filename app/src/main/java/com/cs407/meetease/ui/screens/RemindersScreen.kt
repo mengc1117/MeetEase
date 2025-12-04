@@ -30,6 +30,7 @@ import com.cs407.meetease.data.MemberStatus
 import com.cs407.meetease.ui.theme.AppAmber
 import com.cs407.meetease.ui.theme.AppGreen
 import com.cs407.meetease.ui.theme.AppRed
+import com.cs407.meetease.ui.viewmodels.RemindersUiState
 import com.cs407.meetease.ui.viewmodels.RemindersViewModel
 
 @Composable
@@ -167,14 +168,17 @@ private fun checkAndRequestLocationPermission(
 
 @Composable
 fun LocationSharingCard(
-    uiState: com.cs407.meetease.ui.viewmodels.RemindersUiState,
+    uiState: RemindersUiState,
     onToggleClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (uiState.isSharingLocation) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (uiState.isSharingLocation) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -194,15 +198,33 @@ fun LocationSharingCard(
 @Composable
 fun NoMeetingCard() {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.Info, "No Meetings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "No Meetings",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp)
+            )
             Spacer(modifier = Modifier.height(12.dp))
-            Text("No Confirmed Meetings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                text = "No Confirmed Meetings",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Go to the 'Scheduler' tab to find and confirm meetings.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Go to the 'Scheduler' tab to find and confirm meetings.",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }
@@ -225,7 +247,9 @@ fun ConfirmedMeetingCard(day: String, timeRange: String) {
 @Composable
 fun MemberStatusCard(status: MemberStatus) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
@@ -233,10 +257,24 @@ fun MemberStatusCard(status: MemberStatus) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = status.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            Text(
+                text = status.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val color = when (status.status) { "Confirmed" -> AppGreen; "Running Late" -> AppAmber; else -> AppRed }
-                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
+                // FIX: Properly formatted when expression
+                val color = when (status.status) {
+                    "Confirmed" -> AppGreen
+                    "Running Late" -> AppAmber
+                    else -> AppRed
+                }
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = status.status)
             }
