@@ -1,6 +1,13 @@
 package com.cs407.meetease.ui.screens
 
+import android.Manifest
 import android.app.Application
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +31,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Mic
+import androidx.core.content.ContextCompat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -84,6 +93,39 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateEventDialog by remember { mutableStateOf(false) }
     var clickedEvent: GoogleCalendarEvent? by remember { mutableStateOf(null) }
+    
+    // Voice assistant state
+    val context = LocalContext.current
+    var isListening by remember { mutableStateOf(false) }
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // Permission launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasAudioPermission = isGranted
+        if (isGranted) {
+            isListening = true
+        }
+    }
+
+    // Speech recognizer launcher
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        isListening = false
+        val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (spokenText != null) {
+            viewModel.processVoiceCommand(spokenText)
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -108,11 +150,46 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateEventDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Create New Event", tint = Color.White)
+                // Voice Assistant FAB
+                FloatingActionButton(
+                    onClick = {
+                        if (hasAudioPermission) {
+                            if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                                isListening = true
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "en-US")
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Try: 'Mark Monday 2 PM available', 'Find meetings', 'Select first'")
+                                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L)
+                                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+                                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
+                                }
+                                speechRecognizerLauncher.launch(intent)
+                            }
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    containerColor = if (isListening) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
+                ) {
+                    Icon(Icons.Filled.Mic, contentDescription = "Voice Assistant", tint = Color.White)
+                }
+                
+                // Create Event FAB
+                FloatingActionButton(
+                    onClick = { showCreateEventDialog = true },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Create New Event", tint = Color.White)
+                }
             }
         }
     ) { paddingValues ->
