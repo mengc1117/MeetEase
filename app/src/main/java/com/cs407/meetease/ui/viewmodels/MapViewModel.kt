@@ -24,7 +24,9 @@ data class MapUiState(
     val meetingDestination: GeoPoint? = null,
     val isOrganizer: Boolean = false,
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val currentUserLocation: LatLng? = null,
+    val organizerId: String? = null
 )
 
 class MapViewModel(application: Application) : AndroidViewModel(application) {
@@ -77,7 +79,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             meetingDestination = destination,
-                            isOrganizer = isOrganizer
+                            isOrganizer = isOrganizer,
+                            organizerId = group?.organizerId
                         )
                     }
                 }
@@ -93,9 +96,14 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (snapshot != null) {
                     val members = snapshot.toObjects<Member>()
+
+                    val myMemberData = members.find { it.id == currentUserId }
+                    val myLoc = myMemberData?.location?.let { LatLng(it.latitude, it.longitude) }
+
                     _uiState.update {
                         it.copy(
                             membersWithLocation = members.filter { m -> m.location != null },
+                            currentUserLocation = myLoc,
                             isLoading = false
                         )
                     }
