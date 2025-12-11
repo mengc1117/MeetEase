@@ -1,6 +1,7 @@
 package com.cs407.meetease.ui.viewmodels
 
 import android.app.Application
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -95,6 +96,30 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
             today.plusDays(it.toLong()).format(dayFormatter)
         }
         _uiState.update { it.copy(dynamicDayLabels = labels) }
+    }
+    
+    /**
+     * Converts a day-of-week index (0=Monday, 1=Tuesday, ..., 6=Sunday) 
+     * to a calendar day index (0=today, 1=tomorrow, etc.)
+     * Returns null if the day is not in the current 7-day view.
+     */
+    private fun convertDayOfWeekToCalendarIndex(dayOfWeek: Int): Int? {
+        // Get today's day of week (1=Monday, 7=Sunday in Java)
+        val todayDayOfWeek = today.dayOfWeek.value // 1-7
+        
+        // Convert to 0-based (0=Monday, 6=Sunday)
+        val todayIndex = todayDayOfWeek - 1
+        
+        // Calculate offset
+        var offset = dayOfWeek - todayIndex
+        
+        // Handle wrap-around (if target day is earlier in week, it's next week)
+        if (offset < 0) {
+            offset += 7
+        }
+        
+        // Check if it's within our 7-day view
+        return if (offset < NUM_DAYS_TO_SHOW) offset else null
     }
 
     fun refreshData() {
@@ -268,6 +293,7 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                     .await()
 
                 // Schedule notification reminder 10 minutes before the meeting
+                Log.d("SchedulerViewModel", "Scheduling with dayLabel: '$dayLabel', time: '$startTime - $endTime'")
                 val reminderScheduled = meetingReminderScheduler.scheduleMeetingReminder(
                     meetingDay = dayLabel,
                     meetingTimeRange = "$startTime - $endTime",
@@ -277,7 +303,11 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 val message = if (reminderScheduled) {
                     "Meeting Confirmed! Reminder scheduled for 10 minutes before."
                 } else {
-                    "Meeting Confirmed & Invites Sent! (Reminder could not be scheduled)"
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        "Meeting Confirmed! (Debug: dayLabel='$dayLabel', time='$startTime - $endTime'. Enable exact alarms in Settings for reminders)"
+                    } else {
+                        "Meeting Confirmed! (Debug: dayLabel='$dayLabel', time='$startTime - $endTime'. Check that meeting time is in the future)"
+                    }
                 }
 
                 _uiState.update { it.copy(suggestions = emptyList(), message = message, isLoading = false) }
@@ -653,15 +683,22 @@ class SchedulerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
             CommandAction.MARK_AVAILABILITY -> {
-                val dayIndex = command.dayIndex
+                val voiceDayOfWeek = command.dayIndex // 0=Monday, 1=Tuesday, ..., 6=Sunday
                 val timeSlot = command.timeSlot
                 
-                if (dayIndex != null && timeSlot != null) {
-                    toggleAvailability(dayIndex, timeSlot)
-                    val dayLabel = _uiState.value.dynamicDayLabels.getOrNull(dayIndex) ?: "Day $dayIndex"
-                    val timeLabel = slotToTime(timeSlot)
-                    val status = if (command.markAvailable) "available" else "unavailable"
-                    _uiState.update { it.copy(message = "Marked $status: $dayLabel at $timeLabel") }
+                if (voiceDayOfWeek != null && timeSlot != null) {
+                    // Convert day-of-week to calendar day index
+                    val calendarDayIndex = convertDayOfWeekToCalendarIndex(voiceDayOfWeek)
+                    
+                    if (calendarDayIndex != null) {
+                        toggleAvailability(calendarDayIndex, timeSlot)
+                        val dayLabel = _uiState.value.dynamicDayLabels.getOrNull(calendarDayIndex) ?: "Day $calendarDayIndex"
+                        val timeLabel = slotToTime(timeSlot)
+                        val status = if (command.markAvailable) "available" else "unavailable"
+                        _uiState.update { it.copy(message = "Marked $status: $dayLabel at $timeLabel") }
+                    } else {
+                        _uiState.update { it.copy(message = "That day is not in the current week view.") }
+                    }
                 } else {
                     _uiState.update { it.copy(message = "Could not parse time. Try: 'Mark Monday 2 PM available'") }
                 }

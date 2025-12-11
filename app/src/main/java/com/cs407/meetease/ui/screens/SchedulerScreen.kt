@@ -1,8 +1,13 @@
 package com.cs407.meetease.ui.screens
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.Application
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.content.pm.PackageManager
@@ -93,9 +98,21 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showCreateEventDialog by remember { mutableStateOf(false) }
     var clickedEvent: GoogleCalendarEvent? by remember { mutableStateOf(null) }
+    var showAlarmPermissionDialog by remember { mutableStateOf(false) }
     
     // Voice assistant state
     val context = LocalContext.current
+    
+    // Check if exact alarm permission is granted (Android 12+)
+    val hasExactAlarmPermission = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
+    }
+    
     var isListening by remember { mutableStateOf(false) }
     var hasAudioPermission by remember {
         mutableStateOf(
@@ -142,9 +159,38 @@ fun SchedulerScreen(viewModel: SchedulerViewModel) {
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
+            // Check if message is about alarm permission
+            if (it.contains("exact alarms") || it.contains("Alarms & reminders")) {
+                showAlarmPermissionDialog = true
+            }
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
+    }
+    
+    // Show alarm permission dialog
+    if (showAlarmPermissionDialog && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        AlertDialog(
+            onDismissRequest = { showAlarmPermissionDialog = false },
+            title = { Text("Enable Meeting Reminders") },
+            text = { Text("To receive notifications 10 minutes before meetings, please enable 'Alarms & reminders' permission in Settings.") },
+            confirmButton = {
+                Button(onClick = {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                    showAlarmPermissionDialog = false
+                }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAlarmPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(

@@ -114,8 +114,13 @@ class VoiceCommandParser {
 
         val markAvailable = availabilityKeyword.value
 
-        // Parse day
-        val dayIndex = DAY_KEYWORDS.entries.firstOrNull { text.contains(it.key) }?.value
+        // Parse day - match longest keyword first and use word boundaries to avoid partial matches
+        val dayIndex = DAY_KEYWORDS.entries
+            .sortedByDescending { it.key.length }
+            .firstOrNull { (key, _) ->
+                // Use word boundary regex to avoid matching "day" in "friday"
+                Regex("""(^|\s)${Regex.escape(key)}($|\s)""").containsMatchIn(text)
+            }?.value
         if (dayIndex == null) return null
 
         // Parse time

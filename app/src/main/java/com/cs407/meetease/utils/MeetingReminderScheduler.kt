@@ -61,10 +61,12 @@ class MeetingReminderScheduler(private val context: Context) {
         attendeesCount: Int
     ): Boolean {
         try {
+            Log.d(TAG, "Attempting to schedule reminder for: $meetingDay at $meetingTimeRange")
+            
             // Check if we can schedule exact alarms on Android 12+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (!canScheduleExactAlarms()) {
-                    Log.e(TAG, "Cannot schedule exact alarms - permission not granted")
+                    Log.e(TAG, "Cannot schedule exact alarms - permission not granted. Please enable in Settings.")
                     return false
                 }
             }
@@ -72,12 +74,15 @@ class MeetingReminderScheduler(private val context: Context) {
             val reminderTime = calculateReminderTime(meetingDay, meetingTimeRange)
             
             if (reminderTime == null) {
-                Log.e(TAG, "Failed to calculate reminder time")
+                Log.e(TAG, "Failed to calculate reminder time for: $meetingDay $meetingTimeRange")
                 return false
             }
             
-            if (reminderTime <= System.currentTimeMillis()) {
-                Log.w(TAG, "Meeting time is in the past, not scheduling reminder")
+            val now = System.currentTimeMillis()
+            Log.d(TAG, "Reminder time: ${java.util.Date(reminderTime)}, Current time: ${java.util.Date(now)}")
+            
+            if (reminderTime <= now) {
+                Log.w(TAG, "Meeting time is in the past (reminder: ${java.util.Date(reminderTime)} vs now: ${java.util.Date(now)})")
                 return false
             }
 
@@ -174,15 +179,22 @@ class MeetingReminderScheduler(private val context: Context) {
 
     private fun parseMeetingDateTime(meetingDay: String, meetingTime: String): Long {
         try {
-            // Parse the date format "EEE M/d" (e.g., "Wed 11/20")
-            val dateFormat = SimpleDateFormat("EEE M/d", Locale.US)
+            Log.d(TAG, "Parsing meetingDay='$meetingDay', meetingTime='$meetingTime'")
+            
+            // Parse the date format "EEE M/d" (e.g., "Wed 12/10")
+            // SimpleDateFormat with day-of-week can be lenient, so we'll parse just the date part
+            val datePart = meetingDay.substringAfter(" ") // Extract "M/d" from "EEE M/d"
+            Log.d(TAG, "Date part extracted: '$datePart'")
+            
             val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
             
-            // Parse the date
+            // Parse the date (M/d format) and add current year
             val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-            val dateWithYear = "$meetingDay/$currentYear"
-            val fullDateFormat = SimpleDateFormat("EEE M/d/yyyy", Locale.US)
-            val date = fullDateFormat.parse(dateWithYear)
+            val dateFormat = SimpleDateFormat("M/d/yyyy", Locale.US)
+            dateFormat.isLenient = false // Strict parsing
+            val dateWithYear = "$datePart/$currentYear"
+            Log.d(TAG, "Parsing date: '$dateWithYear'")
+            val date = dateFormat.parse(dateWithYear)
             
             // Parse the time
             val time = timeFormat.parse(meetingTime)
@@ -202,16 +214,28 @@ class MeetingReminderScheduler(private val context: Context) {
                 calendar.set(Calendar.MILLISECOND, 0)
             }
             
-            // If the date is in the past (same day but time passed), move to next year
-            if (calendar.timeInMillis < System.currentTimeMillis()) {
-                // Check if it's truly in the past or just today
-                val now = Calendar.getInstance()
-                if (calendar.get(Calendar.DAY_OF_YEAR) < now.get(Calendar.DAY_OF_YEAR) ||
-                    calendar.get(Calendar.YEAR) < now.get(Calendar.YEAR)) {
+            Log.d(TAG, "Parsed calendar: ${calendar.time}")
+            
+            // If the date is in the past, add a year
+            val now = Calendar.getInstance()
+            if (calendar.before(now)) {
+                Log.d(TAG, "Date is in the past, checking if we need to add a year")
+                // Only add a year if the month/day combination has already passed this year
+                val testCal = Calendar.getInstance()
+                testCal.set(Calendar.MONTH, calendar.get(Calendar.MONTH))
+                testCal.set(Calendar.DAY_OF_MONTH, calendar.get(Calendar.DAY_OF_MONTH))
+                testCal.set(Calendar.HOUR_OF_DAY, calendar.get(Calendar.HOUR_OF_DAY))
+                testCal.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE))
+                testCal.set(Calendar.SECOND, 0)
+                testCal.set(Calendar.MILLISECOND, 0)
+                
+                if (testCal.before(now)) {
                     calendar.add(Calendar.YEAR, 1)
+                    Log.d(TAG, "Added 1 year, new date: ${calendar.time}")
                 }
             }
             
+            Log.d(TAG, "Final meeting time: ${calendar.time} (${calendar.timeInMillis})")
             return calendar.timeInMillis
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing meeting date/time: $meetingDay $meetingTime", e)
